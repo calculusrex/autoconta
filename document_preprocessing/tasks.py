@@ -26,13 +26,12 @@
 
 #x# - put a crop stage between fine rotation and rescale
 #x# - bind the escape key to cancel the current action (revert to the stage initial state)
-# # - make a general FilteringEditor class from which DenoiseEditor, ThresholdEditor...
+#x# - make a general FilteringEditor class from which DenoiseEditor, DilateErodeEditor...
       # and all the other filtering stage classes will inherit
-
-# # - make undo revert to the previus improc stage
-# # - make the warping stage interactive
+#x# - make the warping stage interactive
       # (such that you can move the points afer laying them down and see the change
       # in the warp result in real time)
+#x# - implement undo to revert to the previus improc stage
 
 # # - OCR validation boxes
 #        (raster image label with input box containing detected text underneath)

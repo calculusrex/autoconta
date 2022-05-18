@@ -3,6 +3,7 @@ import tkinter as tk
 # import os
 # import numpy as np
 import cv2 as cv
+from pprint import pprint
 
 from canvas import canvas_from_im, DocumentCanvas
 from im import imwarp, rgb2hex, display_cv, rotate, orthogonal_rotate, rotate_without_clipping, display_cv, denoise, dilate_erode, threshold, crop, im_rescale #, rotate_by_90deg
@@ -22,6 +23,39 @@ editor_data = {
     'threshold': {},
     'dilate_erode': {},
 }
+
+corner_data = {
+    'UPPER_LEFT': {'outward': {'x_factor': -1,
+                               'y_factor': -1},
+                   'inward': {'x_factor': 1,
+                              'y_factor': 1},
+                   'selection_point_index': 0},
+
+    'LOWER_LEFT': {'outward': {'x_factor': -1,
+                               'y_factor': 1},
+                   'inward': {'x_factor': 1,
+                              'y_factor': -1},
+                   'selection_point_index': 1},
+
+    'LOWER_RIGHT': {'outward': {'x_factor': 1,
+                                'y_factor': 1},
+                    'inward': {'x_factor': -1,
+                               'y_factor': -1},
+                    'selection_point_index': 2},
+
+    'UPPER_RIGHT': {'outward': {'x_factor': 1,
+                                'y_factor': -1},
+                    'inward': {'x_factor': -1,
+                               'y_factor': 1},
+                    'selection_point_index': 3}
+}
+
+def flatten_once(xss):
+    ys = []
+    for xs in xss:
+        for x in xs:
+            ys.append(x)
+    return ys
 
 def augment_data(dat1, dat2):
     for key in dat2.keys():
@@ -47,7 +81,8 @@ class ImProcEditor(tk.Frame):
             ('<Motion>', lambda e: self.mouse_label_event_config(e, 'hover')),
             ('<Button-1>', lambda e: self.mouse_label_event_config(e, 'click')),
             ('<Escape>', self.cancel), ('<Control-c>', self.cancel),
-            ('<space>', self.skip)
+            ('<space>', self.skip),
+            ('<Control-z>', lambda e: self.previous_stage()),
         ]
         self.install_main_canvas()
 
@@ -94,9 +129,16 @@ class ImProcEditor(tk.Frame):
         frame = frame_constructor(parent, self.og_im.copy(), self.pipeline_data)
         self.destroy()
         frame.grid(
-            row=0, column=0, rowspan=20)
+            row=0, column=0, rowspan=FRAME_ROWSPAN)
 
     def next_stage(self):
+        self.pipeline_data['improc_params'][self.__class__.__name__] = self.param_data
+        progress_data = {
+            'og_im': self.og_im.copy(), 'proc_im': self.proc_im.copy()
+        }
+        self.pipeline_data['improc_progress'][self.__class__.__name__] = progress_data
+        # pprint(self.pipeline_data)
+        # print()
         parent = self.master
         next_frame_constructor = self.pipeline_data['relative_constructors'][
             self.__class__.__name__]['following']
@@ -104,15 +146,32 @@ class ImProcEditor(tk.Frame):
             parent, self.proc_im.copy(), self.pipeline_data)
         self.destroy()
         frame.grid(
-            row=0, column=0, rowspan=20)
+            row=0, column=0, rowspan=FRAME_ROWSPAN)
+
+    def previous_stage(self):
+        parent = self.master
+        previous_frame_constructor = self.pipeline_data['relative_constructors'][
+            self.__class__.__name__]['previous']
+        frame = previous_frame_constructor(
+            parent,
+            self.pipeline_data[
+                'improc_progress'][previous_frame_constructor.__name__]['og_im'],
+            self.pipeline_data)
+        self.destroy()
+        frame.grid(
+            row=0, column=0, rowspan=FRAME_ROWSPAN)
+        
 
 ### WARPING ----------------------------------------------------------------------------      
 
 class WarpingEditor(ImProcEditor):
     def __init__(self, master, cvim, pipeline_data):
         super().__init__(master, cvim, pipeline_data)
-        self.main_canvas.bind('<Motion>', self.hover)
-        self.main_canvas.bind('<Button-1>', self.click)
+        self.augment_main_canvas_bindings([
+            ('<space>', self.apply_warp),
+            ('<Motion>', self.hover),
+            ('<Button-1>', self.click),
+        ])
         self.main_canvas.install_crosshairs()
 
         self.selection_points = []
@@ -145,6 +204,7 @@ class WarpingEditor(ImProcEditor):
         im_y = int(round(event.y / self.main_canvas.scale_factor))
         self.selection_points.append(
             (im_x, im_y))
+
         if len(self.selection_points) > 1 and len(self.selection_points) < 4:
             x0, y0 = self.selection_points[-2]
             self.laid_selection_lines.append(
@@ -152,10 +212,92 @@ class WarpingEditor(ImProcEditor):
                     *map(lambda n: n * self.main_canvas.scale_factor,
                          [x0, y0, im_x, im_y]),
                     fill=MAGENTA, width=2))
+
         if len(self.selection_points) == 4:
+            for line_index in self.laid_selection_lines:
+                self.main_canvas.delete(line_index)            
+            self.main_canvas.delete(self.floating_selection_line)
+            self.main_canvas.delete(self.closing_selection_line)
+            self.selection_polygon = self.main_canvas.create_polygon(
+                *map(lambda n: n * self.main_canvas.scale_factor,
+                     flatten_once(self.selection_points)),
+                outline=MAGENTA, width=LINE_WIDTH, fill='')
             self.proc_im = imwarp(
-                self.proc_im, self.selection_points)
-            self.next_stage()
+                self.og_im, self.selection_points)
+            self.install_tuning_canvas()
+
+    def install_tuning_canvas(self):
+        self.tuning_canvas = DocumentCanvas(
+            self, self.proc_im)
+        self.tuning_canvas.grid(
+            row=0, column=1, rowspan=FRAME_ROWSPAN)
+        self.tuning_canvas_bindings = [
+            ('<Motion>', self.tuning_hover),
+            ('<Button-4>', lambda e: self.tune(e, 'outward', 16)),
+            ('<Button-5>', lambda e: self.tune(e, 'inward', 16)),
+            ('<Shift-Button-4>', lambda e: self.tune(e, 'outward', 4)),
+            ('<Shift-Button-5>', lambda e: self.tune(e, 'inward', 4)),
+        ]
+        self.load_bindings(
+            self.tuning_canvas, self.tuning_canvas_bindings)
+        self.tuning_corner_highlight = self.tuning_canvas.create_rectangle(
+            0, 0, 0, 0, outline=MAGENTA, width=LINE_WIDTH)
+        self.tuning_canvas.install_crosshairs()
+
+    def update_tuning_canvas(self):
+        self.tuning_canvas.destroy()
+        self.install_tuning_canvas()
+    
+    def tuning_hover(self, event):
+        self.mouse_label_event_config(event, 'hover')
+        self.tuning_canvas.update_crosshairs(event)
+        canv_x, canv_y = event.x, event.y
+        canv_w, canv_h = self.tuning_canvas.canv_w, self.tuning_canvas.canv_h
+        l = 32
+        if canv_x < canv_w / 2:
+            if canv_y < canv_h / 2:
+                highlighted_tuning_corner_key = 'UPPER_LEFT'
+                highlight_rect_coos = (
+                    0, 0, l, l)
+            else:
+                highlighted_tuning_corner_key = 'LOWER_LEFT'
+                highlight_rect_coos = (
+                    0, canv_h - l, l, canv_h)
+        else:
+            if canv_y < self.tuning_canvas.canv_h / 2:
+                highlighted_tuning_corner_key = 'UPPER_RIGHT'
+                highlight_rect_coos = (
+                    canv_w - l, 0, canv_w, l)
+            else:
+                highlighted_tuning_corner_key = 'LOWER_RIGHT'
+                highlight_rect_coos = (
+                    canv_w - l, canv_h - l, canv_w, canv_h)
+        self.highlighted_tuning_corner_key = highlighted_tuning_corner_key
+        # self.highlight_rect_coos = highlight_rect_coos
+        self.tuning_canvas.coords(
+            self.tuning_corner_highlight, *highlight_rect_coos)
+
+    def tune(self, event, direction, offset):
+        dat = corner_data[self.highlighted_tuning_corner_key]
+        x, y = self.selection_points[dat['selection_point_index']]
+        x += dat[direction]['x_factor'] * offset
+        y += dat[direction]['y_factor'] * offset
+        self.selection_points[dat['selection_point_index']] = (x, y)
+        self.main_canvas.coords(
+            self.selection_polygon,
+            *map(lambda n: n * self.main_canvas.scale_factor,
+                 flatten_once(self.selection_points)))
+        self.proc_im = imwarp(
+            self.og_im, self.selection_points)
+        self.update_tuning_canvas()
+
+        # self.main_canvas.coords(self. 
+
+    def apply_warp(self, event): # !!! TO BE COMPLETED
+        self.proc_im = imwarp(
+            self.og_im, self.selection_points)
+        self.param_data = {'selection_points': self.selection_points.copy()}
+        self.next_stage()
 
         
 ### ORTHOGONAL ROTATION --------------------------------------------------------------
@@ -180,6 +322,7 @@ class OrthogonalRotationEditor(ImProcEditor):
         self.update_main_canvas()
 
     def apply_orthogonal_rotation(self, event):
+        self.param_data = {'orthogonal_rotation_ticks': self.orthogonal_rotation_ticks}
         self.next_stage()
 
 ### FINE ROTATION --------------------------------------------------------------
@@ -209,6 +352,7 @@ class FineRotationEditor(ImProcEditor):
     def apply_fine_rotation(self, event):
         self.proc_im = rotate_without_clipping(
             self.og_im, self.fine_rotation_angle)
+        self.param_data = {'rotation_angle': self.fine_rotation_angle}
         self.next_stage()
 
 ### RESCALE -----------------------------------------------------------------------
@@ -287,6 +431,8 @@ class RescaleEditor(ImProcEditor):
             self.letter_resize_scale_factor = TARGET_LETTER_HEIGHT / self.og_letter_height
             self.proc_im = im_rescale(
                 self.og_im, self.letter_resize_scale_factor)
+            self.param_data = {
+                'letter_resize_scale_factor': self.letter_resize_scale_factor}
             self.next_stage()
                 
     def hover_letter_height(self, event):
@@ -334,6 +480,8 @@ class CropEditor(ImProcEditor):
         if len(self.selection_points) == 2:
             self.proc_im = crop(
                 self.og_im, *self.selection_points)
+            self.param_data = {
+                'crop_selection_points': self.selection_points}
             self.next_stage()
 
     def hover_selection_point(self, event):
@@ -405,6 +553,10 @@ class FilteringEditor(ImProcEditor):
                 event, iteration_n_offset=-1)
 
     def apply_filter(self, event):
+        self.param_data = {
+            'kernel_size': self.kernel_size,
+            'iteration_n': self.iteration_n
+        }
         self.next_stage()
 
 ### DENOISE -------------------------------------------------------------------------
@@ -472,6 +624,10 @@ class ThresholdEditor(ImProcEditor):
                 event, constant_offset=-1)
 
     def apply_threshold(self, event):
+        self.param_data = {
+            'block_size': self.block_size,
+            'constant': self.constant
+        }
         self.next_stage()
 
 ### PIPELINE -------------------------------------------------------------------------
@@ -503,11 +659,14 @@ def run_pipeline(constructor_list):
             'previous': previous_constructor,
         }
 
+    pipeline_data['improc_params'] = {}
+    pipeline_data['improc_progress'] = {}
+
     improc = constructor_list[0](
         root, im, pipeline_data)
     improc.grid(row=0, column=0, rowspan=FRAME_ROWSPAN)
 
-    root.mainloop()
+    # root.mainloop()
 
 ### -----------------------------------------------------------------------------------
 
@@ -522,7 +681,7 @@ if __name__ == '__main__':
     samples_fnames = list(
         map(lambda fnm: f'{samples_path}/{fnm}',
             os.listdir('../test_data/samples_2021')))
-    im = cv.imread(samples_fnames[2])
+    im = cv.imread(samples_fnames[0])
 
     ## ----------------------------------------------------------------------
 
