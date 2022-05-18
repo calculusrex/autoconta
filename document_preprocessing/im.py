@@ -196,6 +196,8 @@ def orthogonal_rotate(im, factor90deg):
     return cases[factor90deg](im)
 rotate_by_90deg = orthogonal_rotate
 
+### FILTERING ----------------------------------------------------------
+
 def denoise(im, kernel_size, n_iterations):
     out = im.copy()
     for _ in range(n_iterations):

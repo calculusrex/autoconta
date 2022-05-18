@@ -42,14 +42,17 @@ class ImProcEditor(tk.Frame):
         self.add_label('hover')
         self.add_label('click')
 
-
         self.main_canvas = None
         self.main_canvas_bindings = [
             ('<Motion>', lambda e: self.mouse_label_event_config(e, 'hover')),
             ('<Button-1>', lambda e: self.mouse_label_event_config(e, 'click')),
             ('<Escape>', self.cancel), ('<Control-c>', self.cancel),
+            ('<space>', self.skip)
         ]
         self.install_main_canvas()
+
+    def skip(self, event):
+        self.next_stage()
 
     def add_label(self, key):
         self.labels[key] = tk.Label(self, text=key)
@@ -315,6 +318,7 @@ class CropEditor(ImProcEditor):
         self.selection_rectangle = self.main_canvas.create_rectangle(
             0, 0, 0, 0, outline=MAGENTA, width=LINE_WIDTH)
         self.augment_main_canvas_bindings([
+            ('<space>', self.skip),
             ('<Motion>', self.hover_selection_point),
             ('<Button-1>', self.set_selection_point),
         ])
@@ -345,18 +349,24 @@ class CropEditor(ImProcEditor):
                 self.selection_rectangle,
                 prev_x, prev_y, curr_x, curr_y)
 
+### FILTERING EDITOR ---------------------------------------------------------------
 
-### DENOISE -------------------------------------------------------------------------
-
-class DenoiseEditor(ImProcEditor):
-    def __init__(self, master, cvim, pipeline_data):
+class FilteringEditor(ImProcEditor):
+    def __init__(self, master, cvim, pipeline_data, filter_function,
+                 allow_negative_kernel_size=False):
         super().__init__(master, cvim, pipeline_data)
+        self.fltr = filter_function
+        if allow_negative_kernel_size:
+            self.min_kernel_size_assertion = lambda inst: True
+        else:
+            self.min_kernel_size_assertion = lambda inst: inst.kernel_size >= 3
+
         self.add_label('iteration_n')
         self.add_label('kernel_size')
         self.iteration_n = 1
         self.kernel_size = 1
         self.augment_main_canvas_bindings([
-            ('<space>', self.apply_denoise),
+            ('<space>', self.apply_filter),
             ('<Button-4>', self.increase_kernel_size),
             ('<Button-5>', self.decrease_kernel_size),
             ('<Control-Button-4>', self.increase_iteration_n),
@@ -372,28 +382,43 @@ class DenoiseEditor(ImProcEditor):
             self.kernel_size += kernel_size_offset
             self.labels['kernel_size'].config(
                 text=f'kernel_size\n{self.kernel_size}')
-        if self.kernel_size >= 1:
-            self.proc_im = denoise(
-                self.og_im, self.kernel_size, self.iteration_n)
-            self.update_main_canvas()
+        self.proc_im = self.fltr(
+            self.og_im, self.kernel_size, self.iteration_n)
+        self.update_main_canvas()
 
     def increase_kernel_size(self, event):
         return self.explore_parameters(
             event, kernel_size_offset=2)
+
     def decrease_kernel_size(self, event):
-        if self.kernel_size >= 3:
+        if self.min_kernel_size_assertion(self):
             return self.explore_parameters(
                 event, kernel_size_offset=-2)
+
     def increase_iteration_n(self, event):
         return self.explore_parameters(
             event, iteration_n_offset=1)
+
     def decrease_iteration_n(self, event):
         if self.iteration_n >= 1:
             return self.explore_parameters(
                 event, iteration_n_offset=-1)
 
-    def apply_denoise(self, event):
+    def apply_filter(self, event):
         self.next_stage()
+
+### DENOISE -------------------------------------------------------------------------
+
+class DenoiseEditor(FilteringEditor):
+    def __init__(self, master, cvim, pipeline_data):
+        super().__init__(master, cvim, pipeline_data, denoise)
+
+### DILATE ERODE ----------------------------------------------------------------
+
+class DilateErodeEditor(FilteringEditor):
+    def __init__(self, master, cvim, pipeline_data):
+        super().__init__(master, cvim, pipeline_data, dilate_erode,
+                         allow_negative_kernel_size=True)
 
 ### THRESHOLD -------------------------------------------------------------------
 
@@ -449,54 +474,6 @@ class ThresholdEditor(ImProcEditor):
     def apply_threshold(self, event):
         self.next_stage()
 
-### DILATE ERODE ----------------------------------------------------------------
-
-class DilateErodeEditor(ImProcEditor):
-    def __init__(self, master, cvim, pipeline_data):
-        super().__init__(master, cvim, pipeline_data)
-        self.add_label('kernel_size')
-        self.add_label('iteration_n')
-        self.kernel_size = 1
-        self.iteration_n = 1
-        self.augment_main_canvas_bindings([
-            ('<space>', self.apply_dilate_erode),
-            ('<Button-4>', self.increase_kernel_size),
-            ('<Button-5>', self.decrease_kernel_size),
-            ('<Control-Button-4>', self.increase_iteration_n),
-            ('<Control-Button-5>', self.decrease_iteration_n),
-        ])
-
-    def explore_parameters(self, event, kernel_size_offset=None, iteration_n_offset=None):
-        if iteration_n_offset:
-            self.iteration_n += iteration_n_offset
-            self.labels['iteration_n'].config(
-                text=f'iteration_n\n{self.iteration_n}')
-        if kernel_size_offset:
-            self.kernel_size += kernel_size_offset
-            self.labels['kernel_size'].config(
-                text=f'kernel_size\n{self.kernel_size}')
-        self.proc_im = dilate_erode(
-            self.og_im, self.kernel_size, self.iteration_n)
-        self.update_main_canvas()
-
-    def increase_kernel_size(self, event):
-        return self.explore_parameters(
-            event, kernel_size_offset=2)
-    def decrease_kernel_size(self, event):
-        return self.explore_parameters(
-            event, kernel_size_offset=-2)
-    def increase_iteration_n(self, event):
-        return self.explore_parameters(
-            event, iteration_n_offset=1)
-    def decrease_iteration_n(self, event):
-        if self.iteration_n >= 1:
-            return self.explore_parameters(
-                event, iteration_n_offset=-1)
-
-    def apply_dilate_erode(self, event):
-        self.next_stage()
-
-
 ### PIPELINE -------------------------------------------------------------------------
 
 def run_pipeline(constructor_list):
@@ -545,7 +522,7 @@ if __name__ == '__main__':
     samples_fnames = list(
         map(lambda fnm: f'{samples_path}/{fnm}',
             os.listdir('../test_data/samples_2021')))
-    im = cv.imread(samples_fnames[0])
+    im = cv.imread(samples_fnames[2])
 
     ## ----------------------------------------------------------------------
 
