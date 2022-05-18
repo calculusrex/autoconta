@@ -167,8 +167,9 @@ class ImProcEditor(tk.Frame):
 class WarpingEditor(ImProcEditor):
     def __init__(self, master, cvim, pipeline_data):
         super().__init__(master, cvim, pipeline_data)
+        self.bind('<space>', self.apply_warp),
+        self.focus_set()
         self.augment_main_canvas_bindings([
-            ('<space>', self.apply_warp),
             ('<Motion>', self.hover),
             ('<Button-1>', self.click),
         ])
@@ -233,13 +234,25 @@ class WarpingEditor(ImProcEditor):
             row=0, column=1, rowspan=FRAME_ROWSPAN)
         self.tuning_canvas_bindings = [
             ('<Motion>', self.tuning_hover),
-            ('<Button-4>', lambda e: self.tune(e, 'outward', 16)),
-            ('<Button-5>', lambda e: self.tune(e, 'inward', 16)),
-            ('<Shift-Button-4>', lambda e: self.tune(e, 'outward', 4)),
-            ('<Shift-Button-5>', lambda e: self.tune(e, 'inward', 4)),
+            ('<Button-4>', lambda e: self.tune(e, 16, radial_direction='outward')),
+            ('<Button-5>', lambda e: self.tune(e, 16, radial_direction='inward')),
+            ('<Shift-Button-4>', lambda e: self.tune(e, 4, radial_direction='outward')),
+            ('<Shift-Button-5>', lambda e: self.tune(e, 4, radial_direction='inward')),
+        ]
+        self.additional_main_frame_bindings = [
+            ('w', lambda e: self.tune(e, 16, cartesian_direction=(0, -1))),
+            ('a', lambda e: self.tune(e, 16, cartesian_direction=(-1, 0))),
+            ('s', lambda e: self.tune(e, 16, cartesian_direction=(0, 1))),
+            ('d', lambda e: self.tune(e, 16, cartesian_direction=(1, 0))),
+            ('W', lambda e: self.tune(e, 4, cartesian_direction=(0, -1))),
+            ('A', lambda e: self.tune(e, 4, cartesian_direction=(-1, 0))),
+            ('S', lambda e: self.tune(e, 4, cartesian_direction=(0, 1))),
+            ('D', lambda e: self.tune(e, 4, cartesian_direction=(1, 0))),
         ]
         self.load_bindings(
             self.tuning_canvas, self.tuning_canvas_bindings)
+        self.load_bindings(
+            self, self.additional_main_frame_bindings)
         self.tuning_corner_highlight = self.tuning_canvas.create_rectangle(
             0, 0, 0, 0, outline=MAGENTA, width=LINE_WIDTH)
         self.tuning_canvas.install_crosshairs()
@@ -277,11 +290,18 @@ class WarpingEditor(ImProcEditor):
         self.tuning_canvas.coords(
             self.tuning_corner_highlight, *highlight_rect_coos)
 
-    def tune(self, event, direction, offset):
+    def tune(self, event, offset, cartesian_direction=None, radial_direction=None):
         dat = corner_data[self.highlighted_tuning_corner_key]
         x, y = self.selection_points[dat['selection_point_index']]
-        x += dat[direction]['x_factor'] * offset
-        y += dat[direction]['y_factor'] * offset
+        if cartesian_direction:
+            print(cartesian_direction)
+            x_factor, y_factor = cartesian_direction
+            x += x_factor * offset
+            y += y_factor * offset            
+        if radial_direction:
+            print(radial_direction)
+            x += dat[radial_direction]['x_factor'] * offset
+            y += dat[radial_direction]['y_factor'] * offset            
         self.selection_points[dat['selection_point_index']] = (x, y)
         self.main_canvas.coords(
             self.selection_polygon,
@@ -290,8 +310,6 @@ class WarpingEditor(ImProcEditor):
         self.proc_im = imwarp(
             self.og_im, self.selection_points)
         self.update_tuning_canvas()
-
-        # self.main_canvas.coords(self. 
 
     def apply_warp(self, event): # !!! TO BE COMPLETED
         self.proc_im = imwarp(
