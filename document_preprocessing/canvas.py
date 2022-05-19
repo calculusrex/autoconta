@@ -1,4 +1,5 @@
 import tkinter as tk
+# import tk
 # import pytesseract as tesseract
 # import os
 # import numpy as np

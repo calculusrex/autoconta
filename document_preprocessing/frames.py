@@ -1,12 +1,13 @@
 import tkinter as tk
+# import tk
 # import pytesseract as tesseract
 # import os
 # import numpy as np
 import cv2 as cv
 from pprint import pprint
-v
+
 from canvas import canvas_from_im, DocumentCanvas
-from im import imwarp, rgb2hex, display_cv, rotate, orthogonal_rotate, rotate_without_clipping, display_cv, denoise, dilate_erode, threshold, crop, im_rescale #, rotate_by_90deg
+from im import imwarp, rgb2hex, display_cv, rotate, orthogonal_rotate, rotate_without_clipping, display_cv, denoise, dilate_erode, threshold, crop, im_rescale, dict_from_im #, rotate_by_90deg
 from constants import *
 
 
@@ -73,6 +74,7 @@ class ImProcEditor(tk.Frame):
         self.install_main_canvas()
 
     def skip(self, event):
+        self.param_data = {}
         self.next_stage()
 
     def add_label(self, key):
@@ -280,12 +282,10 @@ class WarpingEditor(ImProcEditor):
         dat = corner_data[self.highlighted_tuning_corner_key]
         x, y = self.selection_points[dat['selection_point_index']]
         if cartesian_direction:
-            print(cartesian_direction)
             x_factor, y_factor = cartesian_direction
             x += x_factor * offset
             y += y_factor * offset            
         if radial_direction:
-            print(radial_direction)
             x += dat[radial_direction]['x_factor'] * offset
             y += dat[radial_direction]['y_factor'] * offset            
         self.selection_points[dat['selection_point_index']] = (x, y)
@@ -634,6 +634,26 @@ class ThresholdEditor(ImProcEditor):
         }
         self.next_stage()
 
+### OPRICAL CHARACTER RECOGNITION (OCR) ----------------------------------------------
+
+class OCR(ImProcEditor):
+    def __init__(self, master, cvim, pipeline_data):
+        super().__init__(master, cvim, pipeline_data)
+        self.perform_ocr()
+
+    def perform_ocr(self):
+        self.ocr_data = dict_from_im(
+            self.proc_im) # !!! or self.og_im, idk which's better
+        for box_data in self.ocr_data:
+            x0, y0 = box_data['left'], box_data['top']
+            w, h = box_data['width'], box_data['height']
+            x1, y1 = x0 + w, y0 + h
+            self.main_canvas.create_rectangle(
+                *map(lambda n: n * self.main_canvas.scale_factor,
+                     [x0, y0, x1, y1]),
+                outline=MAGENTA, width=LINE_WIDTH)
+        
+
 ### PIPELINE -------------------------------------------------------------------------
 
 def run_pipeline(constructor_list):
@@ -685,7 +705,7 @@ if __name__ == '__main__':
     samples_fnames = list(
         map(lambda fnm: f'{samples_path}/{fnm}',
             os.listdir('../test_data/samples_2021')))
-    im = cv.imread(samples_fnames[0])
+    im = cv.imread(samples_fnames[1])
 
     ## ----------------------------------------------------------------------
 
@@ -698,6 +718,7 @@ if __name__ == '__main__':
         DenoiseEditor,
         ThresholdEditor,
         DilateErodeEditor,
+        OCR,
     ]
 
     run_pipeline(improc_pipeline)
