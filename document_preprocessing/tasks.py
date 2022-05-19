@@ -32,6 +32,7 @@
       # (such that you can move the points afer laying them down and see the change
       # in the warp result in real time)
 #x# - implement undo to revert to the previus improc stage
+#x# - implement wasd tuning for the warping stage
 
 # # - OCR validation boxes
 #        (raster image label with input box containing detected text underneath)
