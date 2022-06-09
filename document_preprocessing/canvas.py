@@ -12,9 +12,28 @@ from constants import *
 # state_seed['win_w'] = root.winfo_screenwidth()
 # state_seed['win_h'] = root.winfo_screenheight() - 50    
 
+
+class ValidationCanvas(tk.Canvas):
+    def __init__(self, master, ocr_box_im, width=256, bg=GRAY):
+        self.im = ocr_box_im
+        self.im_h, self.im_w = self.im.shape[:2]
+        self.canv_w = width
+        self.canv_h = int(round(
+            (canv_w * im_h) / im_w))
+        self.scale_factor = self.canv_w / self.im_w
+        
+        super().__init__(
+            master, width=self.canv_w, height=self.canv_h, bg=bg)
+
+        self.tkim = tkim_from_cv(
+            self.im, scale_factor=self.scale_factor)
+        self.create_image(0, 0, image=self.tkim, anchor=tk.NW)
+
+
 class DocumentCanvas(tk.Canvas):
     def __init__(self, master, cvim, bg=GRAY):
-        self.im_h, self.im_w = cvim.shape[:2]
+        self.im = cvim
+        self.im_h, self.im_w = self.im.shape[:2]
         screen_w = master.winfo_screenwidth()
         screen_h = master.winfo_screenheight() - 100
         if self.im_h > self.im_w * 1.25:
@@ -30,7 +49,7 @@ class DocumentCanvas(tk.Canvas):
             master, width=self.canv_w, height=self.canv_h, bg=bg)
 
         self.tkim = tkim_from_cv(
-            cvim, scale_factor=self.scale_factor)
+            self.im, scale_factor=self.scale_factor)
         self.create_image(
             0, 0, image=self.tkim, anchor=tk.NW)
 

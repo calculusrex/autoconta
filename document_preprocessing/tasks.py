@@ -33,9 +33,12 @@
       # in the warp result in real time)
 #x# - implement undo to revert to the previus improc stage
 #x# - implement wasd tuning for the warping stage
+# # - add a border adding/growing editor
 
 # # - OCR validation boxes
 #        (raster image label with input box containing detected text underneath)
+  #x# - OCR class prototype
+  # # - OCRValidation
 
 # # - User drawn rectangle -> OCR acting on cropped section of image
 # # - Word attribute augmentation via selecting boxes with shared attributes on the canvas
