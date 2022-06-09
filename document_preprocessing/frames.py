@@ -642,6 +642,14 @@ class ThresholdEditor(ImProcEditor):
 
 ### OPRICAL CHARACTER RECOGNITION (OCR) ----------------------------------------------
 
+def augment_ocr_box_data_with_box_image(im, box_data):
+    x0, y0 = box_data['left'], box_data['top']
+    w, h = box_data['width'], box_data['height']
+    x1, y1 = x0 + w, y0 + h
+    bd = box_data.copy()                        
+    bd['im'] = crop(im, (x0, y0), (x1, y1))
+    return bd
+
 class OCR(ImProcEditor):
     def __init__(self, master, cvim, pipeline_data):
         super().__init__(master, cvim, pipeline_data)
@@ -667,9 +675,10 @@ class OCR(ImProcEditor):
         parent = self.master
 
         # VALIDATION --------------------------------------------------------------
-        ocr_validation_stack = self.ocr_data.copy()
+        ocr_validation_stack = map(
+            lambda box_data: augment_ocr_box_data_with_box_image(self.og_im, box_data),
+            self.ocr_data)
         ocr_validation_stack.reverse()
-        
         # -------------------------------------------------------------------------
         
         # -------------------------------------------------------------------------
