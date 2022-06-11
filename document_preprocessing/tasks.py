@@ -42,3 +42,8 @@
 
 # # - User drawn rectangle -> OCR acting on cropped section of image
 # # - Word attribute augmentation via selecting boxes with shared attributes on the canvas
+
+# # - Make the validation entry box larger (including it's text larger)
+# # - Distinguish between the types of recognized OCR boxes outputted by tesseract
+  # # - Assign different colors for plotting them
+  # # - 

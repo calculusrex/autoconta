@@ -49,12 +49,19 @@ def augment_data(dat1, dat2):
     for key in dat2.keys():
         dat1[key] = dat2[key]
 
-### GENERAL EDITOR --------------------------------------------------------------------
+### GENERAL FRAME ---------------------------------------------------------------------
 
-class ImProcEditor(tk.Frame):
-    def __init__(self, master, cvim, pipeline_data):
+class MostGeneralFrame(tk.Frame):
+    def __init__(self, master, pipeline_data):
         super().__init__(master)
         self.pipeline_data = pipeline_data
+
+### GENERAL EDITOR --------------------------------------------------------------------
+
+class ImProcEditor(MostGeneralFrame):
+    def __init__(self, master, cvim, pipeline_data):
+        super().__init__(master, pipeline_data)
+        # self.pipeline_data = pipeline_data
         self.grid(row=0, column=0, rowspan=FRAME_ROWSPAN)
         self.og_im = cvim
         self.proc_im = cvim.copy()
@@ -706,7 +713,7 @@ class OCR(ImProcEditor):
         # -------------------------------------------------------------------------
 
     def apply_ocr(self):
-        self.param_data = {} # !!! This should contain the tesseract ocr parameters
+        # self.param_data = {} # !!! This should contain the tesseract ocr parameters
         self.next_stage()
 
 
@@ -716,6 +723,9 @@ class OCRValidation(tk.Frame):
         self.ocr_validation_stack = ocr_validation_stack
         self.box_data = ocr_box_data
         self.im = ocr_box_data['im']
+
+        self.bind('<space>', lambda e: self.next_box()),
+        self.focus_set()
 
         self.pipeline_data = pipeline_data
 
@@ -731,7 +741,24 @@ class OCRValidation(tk.Frame):
         self.entry.grid(row=1, column=0)
 
     def next_box(self):
-        self.pipeline_data['validation'].append()
+        if len(self.recognized_string_var.get()) > 0:
+            validation_data = self.box_data.copy()
+            validation_data['validated_string'] = self.recognized_string_var.get()
+            self.pipeline_data['validation'].append(validation_data)
+
+            print(validation_data)
+            print(validation_data['validated_string'])
+
+            next_ocr_box_data = self.ocr_validation_stack.pop()
+            
+            parent = self.master
+            frame = OCRValidation(
+                parent, next_ocr_box_data, self.ocr_validation_stack, self.pipeline_data)
+            self.destroy()
+            frame.grid(
+                row=0, column=0, rowspan=FRAME_ROWSPAN)
+        else:
+            self.error__nothing_in_validation_entry_box()
         
 
 # class OCRValidation(ImProcEditor):
