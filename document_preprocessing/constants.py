@@ -6,6 +6,8 @@
 def rgb2hex(r,g,b):
     return f'#{int(round(r)):02x}{int(round(g)):02x}{int(round(b)):02x}'
 
+PIPELINE_DATA_FOLDER = 'pipeline_data'
+
 FRAME_ROWSPAN = 25
 LINE_WIDTH = 2
 TARGET_LETTER_HEIGHT = 32

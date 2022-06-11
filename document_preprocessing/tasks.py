@@ -46,4 +46,4 @@
 # # - Make the validation entry box larger (including it's text larger)
 # # - Distinguish between the types of recognized OCR boxes outputted by tesseract
   # # - Assign different colors for plotting them
-  # # - 
+  # # - Filter the boxes being used for ocr validation to only be text-recognition boxes, not block bounds / hierarchical bounds
