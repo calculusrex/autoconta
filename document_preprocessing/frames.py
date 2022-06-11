@@ -780,10 +780,6 @@ class OCRValidation(MostGeneralFrame):
                 self.box_data)
             validation_data['validated_string'] = self.recognized_string_var.get()
             self.pipeline_data['validation'].append(validation_data)
-            # self.pipeline_data['progress'].append('VALIDATION')
-
-            # print(validation_data)
-            # print(validation_data['validated_string'])
 
             next_ocr_box_data = self.ocr_validation_stack.pop()
             
@@ -797,51 +793,7 @@ class OCRValidation(MostGeneralFrame):
             self.error__nothing_in_validation_entry_box()
         
 
-# class OCRValidation(ImProcEditor):
-#     def __init__(self, master, cvim, pipeline_data):
-#         super().__init__(master, cvim, pipeline_data)
-#         self.load_ocr_data()
-        
-#     def load_ocr_data(self):
-#         previous_frame_constructor = self.gui_data['relative_constructors'][
-#             self.__class__.__name__]['previous']
-#         self.ocr_data = pipeline_data['improc_progress'][
-#             previous_frame_constructor.__name__]['ocr_data']
-
-#     def construct_validation_pipeline(self):
-#         for i in range(len(self.ocr_data)):
-#             if i < len(ocr_data) - 1:
-#                 following_constructor = OCRValidationBox
-#                 following_ocr_box_data = 
-
-#         # self.pipeline = list(map(
-#         #     lambda box_data: OCRValidationBox(self, self.og_im, pipeline_data, box_data),
-#         #     self.ocr_data))
-
 ### PIPELINE -------------------------------------------------------------------------
-
-
-# def stage_data_from_constructor_and_assoc_data(constructor, assoc_data, pipeline_index):
-#     return {
-#         'constructor': constructor,
-#         'assoc_data': assoc_data,
-#     }
-
-# def pipeline_data__(constructor_list, stage_associated_data,
-# ):
-
-#     pipeline_data = list(
-#         map(stage_data_from_constructor_and_assoc_data
-#             zip(constructor_list, # frame constructor
-#                 stage_associated_data, # associated data (if any)
-#                 # next constructor
-#                 # previous constructor
-
-    
-    
-#     pipeline_data['improc_params'] = {}
-#     pipeline_data['improc_progress'] = {}
-#     return pipeline_data
 
 def data__from__constructor_list(constructor_list):
     pipeline_data = {}
