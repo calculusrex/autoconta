@@ -19,7 +19,7 @@ class ValidationCanvas(tk.Canvas):
         self.im_h, self.im_w = self.im.shape[:2]
         self.canv_w = width
         self.canv_h = int(round(
-            (canv_w * im_h) / im_w))
+            (self.canv_w * self.im_h) / self.im_w))
         self.scale_factor = self.canv_w / self.im_w
         
         super().__init__(

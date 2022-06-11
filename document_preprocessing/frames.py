@@ -5,6 +5,7 @@ import tkinter as tk
 # import numpy as np
 import cv2 as cv
 from pprint import pprint
+import numpy as np
 
 from canvas import canvas_from_im, DocumentCanvas, ValidationCanvas
 from im import imwarp, rgb2hex, display_cv, rotate, orthogonal_rotate, rotate_without_clipping, display_cv, denoise, dilate_erode, threshold, crop, im_rescale, dict_from_im #, rotate_by_90deg
@@ -675,10 +676,21 @@ class OCR(ImProcEditor):
         parent = self.master
 
         # VALIDATION --------------------------------------------------------------
-        ocr_validation_stack = map(
+        ocr_validation_stack = list(map(
             lambda box_data: augment_ocr_box_data_with_box_image(self.og_im, box_data),
-            self.ocr_data)
+            self.ocr_data))
         ocr_validation_stack.reverse()
+
+        self.pipeline_data['validation'] = []
+        
+        box_data = ocr_validation_stack.pop()
+        frame = OCRValidation(
+            parent, box_data, ocr_validation_stack,  self.pipeline_data)
+
+        self.destroy()
+        frame.grid(
+            row=0, column=0, rowspan=FRAME_ROWSPAN)
+
         # -------------------------------------------------------------------------
         
         # -------------------------------------------------------------------------
@@ -687,11 +699,11 @@ class OCR(ImProcEditor):
         #     self.__class__.__name__]['following']
         # frame = next_frame_constructor(
         #     parent, self.proc_im.copy(), self.pipeline_data)
-        # -------------------------------------------------------------------------
 
-        self.destroy()
-        frame.grid(
-            row=0, column=0, rowspan=FRAME_ROWSPAN)
+        # self.destroy()
+        # frame.grid(
+        #     row=0, column=0, rowspan=FRAME_ROWSPAN)
+        # -------------------------------------------------------------------------
 
     def apply_ocr(self):
         self.param_data = {} # !!! This should contain the tesseract ocr parameters
@@ -699,14 +711,27 @@ class OCR(ImProcEditor):
 
 
 class OCRValidation(tk.Frame):
-    def __init__(self, master, ocr_box_im, ocr_box_data, pipeline_data):
+    def __init__(self, master, ocr_box_data, ocr_validation_stack, pipeline_data):
         super().__init__(master)
-        self.im = ocr_box_im
+        self.ocr_validation_stack = ocr_validation_stack
         self.box_data = ocr_box_data
+        self.im = ocr_box_data['im']
+
         self.pipeline_data = pipeline_data
 
         self.canvas = ValidationCanvas(self, self.im)
+
+        self.recognized_string = self.box_data['text']
+        self.recognized_string_var = tk.StringVar(
+            self, self.recognized_string, 'recognized_string')
+        self.entry = tk.Entry(
+            self, textvariable=self.recognized_string_var)
+
         self.canvas.grid(row=0, column=0)
+        self.entry.grid(row=1, column=0)
+
+    def next_box(self):
+        self.pipeline_data['validation'].append()
         
 
 # class OCRValidation(ImProcEditor):
