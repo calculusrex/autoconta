@@ -13,6 +13,7 @@ import json
 from canvas import canvas_from_im, DocumentCanvas, ValidationCanvas
 from im import imwarp, rgb2hex, display_cv, rotate, orthogonal_rotate, rotate_without_clipping, display_cv, denoise, dilate_erode, threshold, crop, im_rescale, dict_from_im #, rotate_by_90deg
 from introspection import description__from_pipeline_data
+from colors import ocr_box_level_colors
 from constants import *
 
 
@@ -42,7 +43,7 @@ corner_data = {
                     'selection_point_index': 3}
 }
 
-def flatten_once(xss):
+def flatten_single_layer(xss):
     ys = []
     for xs in xss:
         for x in xs:
@@ -82,12 +83,14 @@ class MostGeneralFrame(tk.Frame):
 ### GENERAL EDITOR --------------------------------------------------------------------
 
 class ImProcEditor(MostGeneralFrame):
-    def __init__(self, master, cvim, pipeline_data, gui_data):
+    def __init__(self, master, cvim, pipeline_data, gui_data, canvas_screen_width_percentage=0.9/2):
         super().__init__(master, pipeline_data, gui_data)
         # self.pipeline_data = pipeline_data
         self.grid(row=0, column=0, rowspan=FRAME_ROWSPAN)
         self.og_im = cvim
         self.proc_im = cvim.copy()
+
+        self.canvas_screen_width_percentage = canvas_screen_width_percentage
         
         self.labels = {}
         self.add_label(self.__class__.__name__)
@@ -129,7 +132,8 @@ class ImProcEditor(MostGeneralFrame):
 
     def install_main_canvas(self):
         self.main_canvas = DocumentCanvas(
-            self, self.proc_im)
+            self, self.proc_im,
+            screen_width_percentage=self.canvas_screen_width_percentage)
         self.main_canvas.grid(row=0, column=0, rowspan=FRAME_ROWSPAN)
         self.load_bindings(
             self.main_canvas, self.main_canvas_bindings)
@@ -243,7 +247,7 @@ class WarpingEditor(ImProcEditor):
             self.main_canvas.delete(self.closing_selection_line)
             self.selection_polygon = self.main_canvas.create_polygon(
                 *map(lambda n: n * self.main_canvas.scale_factor,
-                     flatten_once(self.selection_points)),
+                     flatten_single_layer(self.selection_points)),
                 outline=MAGENTA, width=LINE_WIDTH, fill='')
             self.proc_im = imwarp(
                 self.og_im, self.selection_points)
@@ -330,7 +334,7 @@ class WarpingEditor(ImProcEditor):
         self.main_canvas.coords(
             self.selection_polygon,
             *map(lambda n: n * self.main_canvas.scale_factor,
-                 flatten_once(self.selection_points)))
+                 flatten_single_layer(self.selection_points)))
         self.proc_im = imwarp(
             self.og_im, self.selection_points)
         self.update_tuning_canvas()
@@ -684,21 +688,31 @@ def augment_ocr_box_data_with_box_image(im, box_data):
 
 class OCR(ImProcEditor):
     def __init__(self, master, cvim, pipeline_data, gui_data):
-        super().__init__(master, cvim, pipeline_data, gui_data)
+        canvas_screen_width_percentage = 0.85
+        super().__init__(
+            master, cvim, pipeline_data, gui_data,
+            canvas_screen_width_percentage=canvas_screen_width_percentage)
         self.perform_ocr()
         self.bind('<space>', self.apply_ocr),
 
     def perform_ocr(self):
         self.ocr_data = dict_from_im(
             self.proc_im) # !!! or self.og_im, idk which's better
+        max_box_data_level = max([b['level'] for b in self.ocr_data])
+        self.leaf_ocr_data = list(
+            filter(
+                lambda box_data: box_data['level'] == max_box_data_level,
+                self.ocr_data))
         for box_data in self.ocr_data:
+            box_color = ocr_box_level_colors[
+                box_data['level']]
             x0, y0 = box_data['left'], box_data['top']
             w, h = box_data['width'], box_data['height']
             x1, y1 = x0 + w, y0 + h
             self.main_canvas.create_rectangle(
                 *map(lambda n: n * self.main_canvas.scale_factor,
                      [x0, y0, x1, y1]),
-                outline=MAGENTA, width=LINE_WIDTH)
+                outline=box_color, width=LINE_WIDTH)
 
     def apply_ocr(self):
         self.param_data = {} # !!! This should contain the tesseract ocr parameters
@@ -714,7 +728,7 @@ class OCR(ImProcEditor):
         # VALIDATION --------------------------------------------------------------
         ocr_validation_stack = list(map(
             lambda box_data: augment_ocr_box_data_with_box_image(self.og_im, box_data),
-            self.ocr_data))
+            self.leaf_ocr_data))
         ocr_validation_stack.reverse()
 
         self.pipeline_data['validation'] = []
@@ -768,14 +782,13 @@ class OCRValidation(MostGeneralFrame):
         self.recognized_string_var = tk.StringVar(
             self, self.recognized_string, 'recognized_string')
         self.entry = tk.Entry(
-            self, textvariable=self.recognized_string_var)
+            self, textvariable=self.recognized_string_var, font='default 30')
 
         self.canvas.grid(row=0, column=0)
         self.entry.grid(row=1, column=0)
 
     def next_box(self):
         if len(self.recognized_string_var.get()) > 0:
-            print(self.box_data.keys())
             validation_data = serializable_subset__from_box_data(
                 self.box_data)
             validation_data['validated_string'] = self.recognized_string_var.get()
@@ -828,6 +841,8 @@ def data__from__constructor_list(constructor_list):
 
 def run_pipeline(constructor_list, im):
     root = tk.Tk()
+    # root.option_add("*font", f"default-font {FONTSIZE}")
+    
     root.bind('<Control-q>', lambda event: root.destroy())
 
     if PIPELINE_DATA_FOLDER not in os.listdir():

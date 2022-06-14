@@ -1,10 +1,11 @@
+from colors import rgb2hex
 
 # WHITE = '#ffffff'
 # BLACK = '#000000'
 # GRAY = '#363636'
 
-def rgb2hex(r,g,b):
-    return f'#{int(round(r)):02x}{int(round(g)):02x}{int(round(b)):02x}'
+
+FONTSIZE = 16
 
 PIPELINE_DATA_FOLDER = 'pipeline_data'
 

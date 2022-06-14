@@ -38,13 +38,14 @@
 # # - OCR validation boxes
 #        (raster image label with input box containing detected text underneath)
   #x# - OCR class prototype
-  # # - OCRValidation
+  #x# - OCRValidation
 
 # # - User drawn rectangle -> OCR acting on cropped section of image
 # # - Word attribute augmentation via selecting boxes with shared attributes on the canvas
 
 #x# - Implement "save pipeline data"
-# # - Make the validation entry box larger (including it's text larger)
+#x# - Make the validation entry box larger (including it's text larger)
+#x# - make the validation canvas not exceed a height larger than 1/3 of the screen height
 # # - Distinguish between the types of recognized OCR boxes outputted by tesseract
   # # - Assign different colors for plotting them
   # # - Filter the boxes being used for ocr validation to only be text-recognition boxes, not block bounds / hierarchical bounds

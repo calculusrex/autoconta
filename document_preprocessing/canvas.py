@@ -17,9 +17,18 @@ class ValidationCanvas(tk.Canvas):
     def __init__(self, master, ocr_box_im, width=256, bg=GRAY):
         self.im = ocr_box_im
         self.im_h, self.im_w = self.im.shape[:2]
-        self.canv_w = width
-        self.canv_h = int(round(
-            (self.canv_w * self.im_h) / self.im_w))
+        screen_w = master.winfo_screenwidth()
+        screen_h = master.winfo_screenheight() - 100
+        if self.im_h > self.im_w:
+            self.canv_h = int(round(
+                1/3 * screen_h))
+            self.canv_w = int(round(
+                (self.canv_h * self.im_w) / self.im_h))
+        else:
+            self.canv_w = int(round(1/3 * screen_w))
+            self.canv_h = int(round(
+                (self.canv_w * self.im_h) / self.im_w))
+
         self.scale_factor = self.canv_w / self.im_w
         
         super().__init__(
@@ -31,7 +40,7 @@ class ValidationCanvas(tk.Canvas):
 
 
 class DocumentCanvas(tk.Canvas):
-    def __init__(self, master, cvim, bg=GRAY):
+    def __init__(self, master, cvim, bg=GRAY, screen_width_percentage=1/3):
         self.im = cvim
         self.im_h, self.im_w = self.im.shape[:2]
         screen_w = master.winfo_screenwidth()
@@ -41,7 +50,7 @@ class DocumentCanvas(tk.Canvas):
             self.scale_factor = self.canv_h / self.im_h
             self.canv_w = int(self.im_w * self.scale_factor)
         else:
-            self.canv_w = screen_w // 3
+            self.canv_w = int(round(screen_w * screen_width_percentage))
             self.scale_factor = self.canv_w / self.im_w
             self.canv_h = int(self.im_h * self.scale_factor)
 
