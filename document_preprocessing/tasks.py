@@ -35,7 +35,7 @@
 #x# - implement wasd tuning for the warping stage
 # # - add a border adding/growing editor
 
-# # - OCR validation boxes
+#x# - OCR validation boxes
 #        (raster image label with input box containing detected text underneath)
   #x# - OCR class prototype
   #x# - OCRValidation
@@ -46,6 +46,8 @@
 #x# - Implement "save pipeline data"
 #x# - Make the validation entry box larger (including it's text larger)
 #x# - make the validation canvas not exceed a height larger than 1/3 of the screen height
-# # - Distinguish between the types of recognized OCR boxes outputted by tesseract
-  # # - Assign different colors for plotting them
-  # # - Filter the boxes being used for ocr validation to only be text-recognition boxes, not block bounds / hierarchical bounds
+#x# - Distinguish between the types of recognized OCR boxes outputted by tesseract
+  #x# - Assign different colors for plotting them
+  #x# - Filter the boxes being used for ocr validation to only be text-recognition boxes, not block bounds / hierarchical bounds
+
+# # - test
