@@ -66,11 +66,11 @@ class DocumentCanvas(tk.Canvas):
         for i in range(1, self.canv_h // offset + 1): # horizontal
             self.create_line(
                 0, i*offset, self.canv_w, i*offset,
-                fill=WHITE, width=1)
+                fill=GRAY, width=1)
         for i in range(1, self.canv_w // offset + 1): # vertical
             self.create_line(
                 i*offset, 0, i*offset, self.canv_h,
-                fill=WHITE, width=1)
+                fill=GRAY, width=1)
 
     def install_crosshairs(self, fill=GRAY, width=1):
         self.horizontal_hair = self.create_line(0, 0, 0, 0, fill=fill, width=width)
@@ -111,11 +111,11 @@ def canvas_from_im(global_data, root, im, grid=None):
         for i in range(1, grid):
             canvas.create_line(
                 0, i*h_offset, canv_w, i*h_offset,
-                fill=WHITE, width=1
+                fill=GRAY, width=1
             )
             canvas.create_line(
                 i*w_offset, 0, i*w_offset, canv_h,
-                fill=WHITE, width=1
+                fill=GRAY, width=1
             )            
     
     return canvas, scale_factor

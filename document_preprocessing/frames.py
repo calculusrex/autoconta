@@ -51,25 +51,28 @@ def augment_data(dat1, dat2):
 ### GENERAL EDITOR --------------------------------------------------------------------
 
 class ImProcEditor(tk.Frame):
-    def __init__(self, master, cvim, pipeline_data, data_directed=False):
+    def __init__(self, master, image_data, pipeline_data, data_directed=False):
         super().__init__(master)
         self.data_directed = data_directed
         self.pipeline_data = pipeline_data
         self.grid(row=0, column=0, rowspan=FRAME_ROWSPAN)
-        self.og_im = cvim
-        self.proc_im = cvim.copy()
+        self.og_im = image_data['im']
+        self.og_im_fname = image_data['fname']
+        
+        self.proc_im = image_data['im'].copy()
         
         self.labels = {}
         self.add_label(self.__class__.__name__)
         self.add_label('hover')
         self.add_label('click')
 
+        self.bind('<space>', self.skip)
+
         self.main_canvas = None
         self.main_canvas_bindings = [
             ('<Motion>', lambda e: self.mouse_label_event_config(e, 'hover')),
             ('<Button-1>', lambda e: self.mouse_label_event_config(e, 'click')),
             ('<Escape>', self.cancel), ('<Control-c>', self.cancel),
-            ('<space>', self.skip),
             ('<Control-z>', lambda e: self.previous_stage()),
         ]
         self.install_main_canvas()
@@ -165,12 +168,13 @@ class ImProcEditor(tk.Frame):
 ### WARPING ----------------------------------------------------------------------------      
 
 class WarpingEditor(ImProcEditor):
-    def __init__(self, master, cvim, pipeline_data, data_directed=False):
-        super().__init__(master, cvim, pipeline_data, data_directed=data_directed)
-        self.bind('<space>', self.apply_warp),
+    def __init__(self, master, image_data, pipeline_data, data_directed=False):
+        super().__init__(master, image_data, pipeline_data, data_directed=data_directed)
+
         self.augment_main_canvas_bindings([
             ('<Motion>', self.hover),
             ('<Button-1>', self.click),
+            ('<space>', self.auto_place_points),
         ])
         self.main_canvas.install_crosshairs()
 
@@ -202,8 +206,9 @@ class WarpingEditor(ImProcEditor):
         self.mouse_label_event_config(event, 'click')
         im_x = int(round(event.x / self.main_canvas.scale_factor))
         im_y = int(round(event.y / self.main_canvas.scale_factor))
-        self.selection_points.append(
-            (im_x, im_y))
+        if len(self.selection_points) < 4:
+            self.selection_points.append(
+                (im_x, im_y))
 
         if len(self.selection_points) > 1 and len(self.selection_points) < 4:
             x0, y0 = self.selection_points[-2]
@@ -214,6 +219,7 @@ class WarpingEditor(ImProcEditor):
                     fill=MAGENTA, width=2))
 
         if len(self.selection_points) == 4:
+            self.bind('<space>', self.apply_warp)
             for line_index in self.laid_selection_lines:
                 self.main_canvas.delete(line_index)            
             self.main_canvas.delete(self.floating_selection_line)
@@ -226,6 +232,22 @@ class WarpingEditor(ImProcEditor):
                 self.og_im, self.selection_points)
             self.install_tuning_canvas()
 
+    def auto_place_points(self, event):
+        self.selection_points = [
+            (0, 0),
+            (0, self.main_canvas.im_h),
+            (self.main_canvas.im_w, self.main_canvas.im_h),
+            (self.main_canvas.im_w, 0),
+        ]
+        self.bind('<space>', self.apply_warp)
+        self.selection_polygon = self.main_canvas.create_polygon(
+            *map(lambda n: n * self.main_canvas.scale_factor,
+                 flatten_once(self.selection_points)),
+            outline=MAGENTA, width=LINE_WIDTH, fill='')
+        self.proc_im = imwarp(
+            self.og_im, self.selection_points)
+        self.install_tuning_canvas()        
+            
     def install_tuning_canvas(self):
         self.tuning_canvas = DocumentCanvas(
             self, self.proc_im)
@@ -322,8 +344,8 @@ class WarpingEditor(ImProcEditor):
 ### ORTHOGONAL ROTATION --------------------------------------------------------------
 
 class OrthogonalRotationEditor(ImProcEditor):
-    def __init__(self, master, cvim, pipeline_data, data_directed=False):
-        super().__init__(master, cvim, pipeline_data, data_directed=data_directed)
+    def __init__(self, master, image_data, pipeline_data, data_directed=False):
+        super().__init__(master, image_data, pipeline_data, data_directed=data_directed)
         self.add_label('angle')
         self.orthogonal_rotation_ticks = 0
         self.augment_main_canvas_bindings([
@@ -347,14 +369,14 @@ class OrthogonalRotationEditor(ImProcEditor):
 ### FINE ROTATION --------------------------------------------------------------
 
 class FineRotationEditor(ImProcEditor):
-    def __init__(self, master, cvim, pipeline_data, data_directed=False):
-        super().__init__(master, cvim, pipeline_data, data_directed=data_directed)
+    def __init__(self, master, image_data, pipeline_data, data_directed=False):
+        super().__init__(master, image_data, pipeline_data, data_directed=data_directed)
         self.add_label('angle')
         self.fine_rotation_angle = 0 # degrees
         self.augment_main_canvas_bindings([
             ('<space>', self.apply_fine_rotation),
-            ('<Shift-Button-4>', lambda _: self.rotate_fine(1)), # trig direc. (counterclock.)
-            ('<Shift-Button-5>', lambda _: self.rotate_fine(-1)), # trig direction (clockwise)
+            ('<Shift-Button-4>', lambda _: self.rotate_fine(0.25)), # trig dir. (counterclck)
+            ('<Shift-Button-5>', lambda _: self.rotate_fine(-0.25)), # trig dir. (clockwise)
             ('<Button-4>', lambda _: self.rotate_fine(5)), # trig direc. (counterclock.)
             ('<Button-5>', lambda _: self.rotate_fine(-5)), # trig direction (clockwise)
         ])
@@ -377,8 +399,8 @@ class FineRotationEditor(ImProcEditor):
 ### RESCALE -----------------------------------------------------------------------
 
 class RescaleEditor(ImProcEditor):
-    def __init__(self, master, cvim, pipeline_data, data_directed=False):
-        super().__init__(master, cvim, pipeline_data, data_directed=data_directed)
+    def __init__(self, master, image_data, pipeline_data, data_directed=False):
+        super().__init__(master, image_data, pipeline_data, data_directed=data_directed)
         self.add_label('og_letter_height')
         self.roi_points = []
         self.letter_height_ys = []
@@ -477,8 +499,8 @@ class RescaleEditor(ImProcEditor):
 ### CROP -----------------------------------------------------------------------------
 
 class CropEditor(ImProcEditor):
-    def __init__(self, master, cvim, pipeline_data, data_directed=False):
-        super().__init__(master, cvim, pipeline_data, data_directed=data_directed)
+    def __init__(self, master, image_data, pipeline_data, data_directed=False):
+        super().__init__(master, image_data, pipeline_data, data_directed=data_directed)
         self.selection_points = []
         self.selection_rectangle = self.main_canvas.create_rectangle(
             0, 0, 0, 0, outline=MAGENTA, width=LINE_WIDTH)
@@ -519,9 +541,9 @@ class CropEditor(ImProcEditor):
 ### FILTERING EDITOR ---------------------------------------------------------------
 
 class FilteringEditor(ImProcEditor):
-    def __init__(self, master, cvim, pipeline_data, filter_function,
+    def __init__(self, master, image_data, pipeline_data, filter_function,
                  allow_negative_kernel_size=False, data_directed=False):
-        super().__init__(master, cvim, pipeline_data, data_directed=data_directed)
+        super().__init__(master, image_data, pipeline_data, data_directed=data_directed)
         self.fltr = filter_function
         if allow_negative_kernel_size:
             self.min_kernel_size_assertion = lambda inst: True
@@ -581,21 +603,22 @@ class FilteringEditor(ImProcEditor):
 ### DENOISE -------------------------------------------------------------------------
 
 class DenoiseEditor(FilteringEditor):
-    def __init__(self, master, cvim, pipeline_data, data_directed=False):
-        super().__init__(master, cvim, pipeline_data, denoise, data_directed=data_directed)
+    def __init__(self, master, image_data, pipeline_data, data_directed=False):
+        super().__init__(master, image_data, pipeline_data, denoise,
+                         data_directed=data_directed)
 
 ### DILATE ERODE ----------------------------------------------------------------
 
 class DilateErodeEditor(FilteringEditor):
-    def __init__(self, master, cvim, pipeline_data, data_directed=False):
-        super().__init__(master, cvim, pipeline_data, dilate_erode,
+    def __init__(self, master, image_data, pipeline_data, data_directed=False):
+        super().__init__(master, image_data, pipeline_data, dilate_erode,
                          allow_negative_kernel_size=True, data_directed=data_directed)
 
 ### THRESHOLD -------------------------------------------------------------------
 
 class ThresholdEditor(ImProcEditor):
-    def __init__(self, master, cvim, pipeline_data, data_directed=False):
-        super().__init__(master, cvim, pipeline_data, data_directed=data_directed)
+    def __init__(self, master, image_data, pipeline_data, data_directed=False):
+        super().__init__(master, image_data, pipeline_data, data_directed=data_directed)
         self.block_size = 32 + 1
         self.constant = 5
         self.bw_im = cv.cvtColor(

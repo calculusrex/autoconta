@@ -26,3 +26,5 @@ HUMAN = rgb2hex(12, 128, 198)
 ATTENTION = rgb2hex(198, 12, 128)
 
 TITLE = 'Tesseract + OpenCV'
+
+OUTPUT_FOLDER = "output"
