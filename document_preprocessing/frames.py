@@ -5,15 +5,9 @@ import tkinter as tk
 # import numpy as np
 import cv2 as cv
 from pprint import pprint
-import numpy as np
-import os
-from datetime import datetime
-import json
 
 from canvas import canvas_from_im, DocumentCanvas, ValidationCanvas
 from im import imwarp, rgb2hex, display_cv, rotate, orthogonal_rotate, rotate_without_clipping, display_cv, denoise, dilate_erode, threshold, crop, im_rescale, dict_from_im #, rotate_by_90deg
-from introspection import description__from_pipeline_data
-from colors import ocr_box_level_colors
 from constants import *
 
 
@@ -43,7 +37,7 @@ corner_data = {
                     'selection_point_index': 3}
 }
 
-def flatten_single_layer(xss):
+def flatten_once(xss):
     ys = []
     for xs in xss:
         for x in xs:
@@ -54,43 +48,15 @@ def augment_data(dat1, dat2):
     for key in dat2.keys():
         dat1[key] = dat2[key]
 
-### GENERAL FRAME ---------------------------------------------------------------------
-
-class MostGeneralFrame(tk.Frame):
-    def __init__(self, master, pipeline_data, gui_data):
-        super().__init__(master)
-        self.pipeline_data = pipeline_data
-        self.gui_data = gui_data
-        
-        self.bind('<Control-s>', self.save_pipeline_data)
-        
-    def save_pipeline_data(self, event):
-        now = datetime.now()
-        day_string = now.strftime('%d_%m_%y')
-        if day_string not in os.listdir(PIPELINE_DATA_FOLDER):
-            os.mkdir(f'{PIPELINE_DATA_FOLDER}/{day_string}')
-        timestamp = now.timestamp()
-        description = description__from_pipeline_data(
-            self.pipeline_data)
-        fname = f'{PIPELINE_DATA_FOLDER}/{day_string}/{description}__{timestamp}.json'
-        with open(fname, 'x') as f:
-            print(fname)
-            f.write(
-                json.dumps(self.pipeline_data))
-
-        
-
 ### GENERAL EDITOR --------------------------------------------------------------------
 
-class ImProcEditor(MostGeneralFrame):
-    def __init__(self, master, cvim, pipeline_data, gui_data, canvas_screen_width_percentage=0.9/2):
-        super().__init__(master, pipeline_data, gui_data)
-        # self.pipeline_data = pipeline_data
+class ImProcEditor(tk.Frame):
+    def __init__(self, master, cvim, pipeline_data):
+        super().__init__(master)
+        self.pipeline_data = pipeline_data
         self.grid(row=0, column=0, rowspan=FRAME_ROWSPAN)
         self.og_im = cvim
         self.proc_im = cvim.copy()
-
-        self.canvas_screen_width_percentage = canvas_screen_width_percentage
         
         self.labels = {}
         self.add_label(self.__class__.__name__)
@@ -132,8 +98,7 @@ class ImProcEditor(MostGeneralFrame):
 
     def install_main_canvas(self):
         self.main_canvas = DocumentCanvas(
-            self, self.proc_im,
-            screen_width_percentage=self.canvas_screen_width_percentage)
+            self, self.proc_im)
         self.main_canvas.grid(row=0, column=0, rowspan=FRAME_ROWSPAN)
         self.load_bindings(
             self.main_canvas, self.main_canvas_bindings)
@@ -155,7 +120,6 @@ class ImProcEditor(MostGeneralFrame):
             row=0, column=0, rowspan=FRAME_ROWSPAN)
 
     def next_stage(self):
-        self.pipeline_data['progress'].append(self.__class__.__name__)
         self.pipeline_data['improc_params'][self.__class__.__name__] = self.param_data
         progress_data = {
             'og_im': self.og_im.copy(), 'proc_im': self.proc_im.copy()
@@ -167,7 +131,7 @@ class ImProcEditor(MostGeneralFrame):
         # pprint(self.pipeline_data)
         # print()
         parent = self.master
-        next_frame_constructor = self.gui_data['relative_constructors'][
+        next_frame_constructor = self.pipeline_data['relative_constructors'][
             self.__class__.__name__]['following']
         frame = next_frame_constructor(
             parent, self.proc_im.copy(), self.pipeline_data)
@@ -177,7 +141,7 @@ class ImProcEditor(MostGeneralFrame):
 
     def previous_stage(self):
         parent = self.master
-        previous_frame_constructor = self.gui_data['relative_constructors'][
+        previous_frame_constructor = self.pipeline_data['relative_constructors'][
             self.__class__.__name__]['previous']
         frame = previous_frame_constructor(
             parent,
@@ -247,7 +211,7 @@ class WarpingEditor(ImProcEditor):
             self.main_canvas.delete(self.closing_selection_line)
             self.selection_polygon = self.main_canvas.create_polygon(
                 *map(lambda n: n * self.main_canvas.scale_factor,
-                     flatten_single_layer(self.selection_points)),
+                     flatten_once(self.selection_points)),
                 outline=MAGENTA, width=LINE_WIDTH, fill='')
             self.proc_im = imwarp(
                 self.og_im, self.selection_points)
@@ -334,7 +298,7 @@ class WarpingEditor(ImProcEditor):
         self.main_canvas.coords(
             self.selection_polygon,
             *map(lambda n: n * self.main_canvas.scale_factor,
-                 flatten_single_layer(self.selection_points)))
+                 flatten_once(self.selection_points)))
         self.proc_im = imwarp(
             self.og_im, self.selection_points)
         self.update_tuning_canvas()
@@ -678,143 +642,116 @@ class ThresholdEditor(ImProcEditor):
 
 ### OPRICAL CHARACTER RECOGNITION (OCR) ----------------------------------------------
 
-def augment_ocr_box_data_with_box_image(im, box_data):
-    x0, y0 = box_data['left'], box_data['top']
-    w, h = box_data['width'], box_data['height']
-    x1, y1 = x0 + w, y0 + h
-    bd = box_data.copy()                        
-    bd['im'] = crop(im, (x0, y0), (x1, y1))
-    return bd
-
 class OCR(ImProcEditor):
-    def __init__(self, master, cvim, pipeline_data, gui_data):
-        canvas_screen_width_percentage = 0.85
-        super().__init__(
-            master, cvim, pipeline_data, gui_data,
-            canvas_screen_width_percentage=canvas_screen_width_percentage)
+    def __init__(self, master, cvim, pipeline_data):
+        super().__init__(master, cvim, pipeline_data)
         self.perform_ocr()
         self.bind('<space>', self.apply_ocr),
 
     def perform_ocr(self):
         self.ocr_data = dict_from_im(
             self.proc_im) # !!! or self.og_im, idk which's better
-        max_box_data_level = max([b['level'] for b in self.ocr_data])
-        self.leaf_ocr_data = list(
-            filter(
-                lambda box_data: box_data['level'] == max_box_data_level,
-                self.ocr_data))
         for box_data in self.ocr_data:
-            box_color = ocr_box_level_colors[
-                box_data['level']]
             x0, y0 = box_data['left'], box_data['top']
             w, h = box_data['width'], box_data['height']
             x1, y1 = x0 + w, y0 + h
             self.main_canvas.create_rectangle(
                 *map(lambda n: n * self.main_canvas.scale_factor,
                      [x0, y0, x1, y1]),
-                outline=box_color, width=LINE_WIDTH)
-
-    def apply_ocr(self):
-        self.param_data = {} # !!! This should contain the tesseract ocr parameters
-        self.next_stage()
+                outline=MAGENTA, width=LINE_WIDTH)
 
     def next_stage(self):
         self.pipeline_data['improc_params'][self.__class__.__name__] = self.param_data
         progress_data = {'ocr_data': self.ocr_data}
         self.pipeline_data['improc_progress'][self.__class__.__name__] = progress_data
         parent = self.master
-        self.pipeline_data['progress'].append('OCR')
 
         # VALIDATION --------------------------------------------------------------
-        ocr_validation_stack = list(map(
-            lambda box_data: augment_ocr_box_data_with_box_image(self.og_im, box_data),
-            self.leaf_ocr_data))
+        ocr_validation_stack = self.ocr_data.copy()
         ocr_validation_stack.reverse()
-
-        self.pipeline_data['validation'] = []
         
-        box_data = ocr_validation_stack.pop()
-        frame = OCRValidation(
-            parent, box_data, ocr_validation_stack,  self.pipeline_data, self.gui_data)
+        # -------------------------------------------------------------------------
+        
+        # -------------------------------------------------------------------------
+        # NEXT CONSTRUCTOR IN PIPELINE IS DELAYED FOR AFTER THE VALIDATION STAGES -
+        # next_frame_constructor = self.pipeline_data['relative_constructors'][
+        #     self.__class__.__name__]['following']
+        # frame = next_frame_constructor(
+        #     parent, self.proc_im.copy(), self.pipeline_data)
+        # -------------------------------------------------------------------------
 
         self.destroy()
         frame.grid(
             row=0, column=0, rowspan=FRAME_ROWSPAN)
 
-        # -------------------------------------------------------------------------
-        
-        # -------------------------------------------------------------------------
-        # NEXT CONSTRUCTOR IN PIPELINE IS DELAYED FOR AFTER THE VALIDATION STAGES -
-        # next_frame_constructor = self.gui_data['relative_constructors'][
-        #     self.__class__.__name__]['following']
-        # frame = next_frame_constructor(
-        #     parent, self.proc_im.copy(), self.pipeline_data)
+    def apply_ocr(self):
+        self.param_data = {} # !!! This should contain the tesseract ocr parameters
+        self.next_stage()
 
-        # self.destroy()
-        # frame.grid(
-        #     row=0, column=0, rowspan=FRAME_ROWSPAN)
-        # -------------------------------------------------------------------------
 
-serializable_subset_keys = [
-    'level', 'page_num', 'block_num', 'par_num', 'line_num', 'word_num',
-    'left', 'top', 'width', 'height',
-    'conf', 'text'
-]
-def serializable_subset__from_box_data(box_data):
-    subset = {}
-    for key in serializable_subset_keys:
-        subset[key] = box_data[key]
-    return subset
-
-class OCRValidation(MostGeneralFrame):
-    def __init__(self, master, ocr_box_data, ocr_validation_stack, pipeline_data, gui_data):
-        super().__init__(master, pipeline_data, gui_data)
-        self.ocr_validation_stack = ocr_validation_stack
+class OCRValidation(tk.Frame):
+    def __init__(self, master, ocr_box_im, ocr_box_data, pipeline_data):
+        super().__init__(master)
+        self.im = ocr_box_im
         self.box_data = ocr_box_data
-        self.im = ocr_box_data['im']
-
-        self.bind('<space>', lambda e: self.next_box()),
-        self.focus_set()
+        self.pipeline_data = pipeline_data
 
         self.canvas = ValidationCanvas(self, self.im)
-
-        self.recognized_string = self.box_data['text']
-        self.recognized_string_var = tk.StringVar(
-            self, self.recognized_string, 'recognized_string')
-        self.entry = tk.Entry(
-            self, textvariable=self.recognized_string_var, font='default 30')
-
         self.canvas.grid(row=0, column=0)
-        self.entry.grid(row=1, column=0)
-
-    def next_box(self):
-        if len(self.recognized_string_var.get()) > 0:
-            validation_data = serializable_subset__from_box_data(
-                self.box_data)
-            validation_data['validated_string'] = self.recognized_string_var.get()
-            self.pipeline_data['validation'].append(validation_data)
-
-            next_ocr_box_data = self.ocr_validation_stack.pop()
-            
-            parent = self.master
-            frame = OCRValidation(
-                parent, next_ocr_box_data, self.ocr_validation_stack, self.pipeline_data, self.gui_data)
-            self.destroy()
-            frame.grid(
-                row=0, column=0, rowspan=FRAME_ROWSPAN)
-        else:
-            self.error__nothing_in_validation_entry_box()
         
+
+# class OCRValidation(ImProcEditor):
+#     def __init__(self, master, cvim, pipeline_data):
+#         super().__init__(master, cvim, pipeline_data)
+#         self.load_ocr_data()
+        
+#     def load_ocr_data(self):
+#         previous_frame_constructor = self.pipeline_data['relative_constructors'][
+#             self.__class__.__name__]['previous']
+#         self.ocr_data = pipeline_data['improc_progress'][
+#             previous_frame_constructor.__name__]['ocr_data']
+
+#     def construct_validation_pipeline(self):
+#         for i in range(len(self.ocr_data)):
+#             if i < len(ocr_data) - 1:
+#                 following_constructor = OCRValidationBox
+#                 following_ocr_box_data = 
+
+#         # self.pipeline = list(map(
+#         #     lambda box_data: OCRValidationBox(self, self.og_im, pipeline_data, box_data),
+#         #     self.ocr_data))
 
 ### PIPELINE -------------------------------------------------------------------------
 
-def data__from__constructor_list(constructor_list):
+
+# def stage_data_from_constructor_and_assoc_data(constructor, assoc_data, pipeline_index):
+#     return {
+#         'constructor': constructor,
+#         'assoc_data': assoc_data,
+#     }
+
+# def pipeline_data__(constructor_list, stage_associated_data,
+# ):
+
+#     pipeline_data = list(
+#         map(stage_data_from_constructor_and_assoc_data
+#             zip(constructor_list, # frame constructor
+#                 stage_associated_data, # associated data (if any)
+#                 # next constructor
+#                 # previous constructor
+
+    
+    
+#     pipeline_data['improc_params'] = {}
+#     pipeline_data['improc_progress'] = {}
+#     return pipeline_data
+
+def pipeline_data__from__constructor_list(constructor_list):
     pipeline_data = {}
     pipeline_data['sequence'] = list(
         map(lambda x: x.__name__,
             constructor_list))
-    gui_data = {}
-    gui_data['relative_constructors'] = {}
+    pipeline_data['relative_constructors'] = {}
     for i in range(len(constructor_list)):
         constructor = constructor_list[i]
 
@@ -828,31 +765,25 @@ def data__from__constructor_list(constructor_list):
         else:
             previous_constructor = constructor_list[i-1]
 
-        gui_data['relative_constructors'][constructor.__name__] = {
+        pipeline_data['relative_constructors'][constructor.__name__] = {
             'following': following_constructor,
             'previous': previous_constructor,
         }
 
     pipeline_data['improc_params'] = {}
     pipeline_data['improc_progress'] = {}
-    pipeline_data['progress'] = []
-    return pipeline_data, gui_data
+    return pipeline_data
 
 
 def run_pipeline(constructor_list, im):
     root = tk.Tk()
-    # root.option_add("*font", f"default-font {FONTSIZE}")
-    
     root.bind('<Control-q>', lambda event: root.destroy())
 
-    if PIPELINE_DATA_FOLDER not in os.listdir():
-        os.mkdir(PIPELINE_DATA_FOLDER)
-
-    pipeline_data, gui_data = data__from__constructor_list(
+    pipeline_data = pipeline_data__from__constructor_list(
         constructor_list)
 
     improc = constructor_list[0](
-        root, im, pipeline_data, gui_data)
+        root, im, pipeline_data)
     improc.grid(row=0, column=0, rowspan=FRAME_ROWSPAN)
 
     # root.mainloop()
@@ -861,6 +792,9 @@ def run_pipeline(constructor_list, im):
 
 if __name__ == '__main__':
     print('frames.py')
+
+    import os
+    import cv2 as cv
 
     #clean_invoice_fname = '../test_data/609d5d3c4d120e370de52b70_invoice-lp-light-border.png'
     samples_path = '../test_data/samples_2021'
