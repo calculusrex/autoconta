@@ -51,8 +51,9 @@ def augment_data(dat1, dat2):
 ### GENERAL EDITOR --------------------------------------------------------------------
 
 class ImProcEditor(tk.Frame):
-    def __init__(self, master, cvim, pipeline_data):
+    def __init__(self, master, cvim, pipeline_data, data_directed=False):
         super().__init__(master)
+        self.data_directed = data_directed
         self.pipeline_data = pipeline_data
         self.grid(row=0, column=0, rowspan=FRAME_ROWSPAN)
         self.og_im = cvim
@@ -120,24 +121,32 @@ class ImProcEditor(tk.Frame):
             row=0, column=0, rowspan=FRAME_ROWSPAN)
 
     def next_stage(self):
-        self.pipeline_data['improc_params'][self.__class__.__name__] = self.param_data
-        progress_data = {
-            'og_im': self.og_im.copy(), 'proc_im': self.proc_im.copy()
-        }
-        # SAVE --------------------------------------------------------------------
-        cv.imwrite(f'improc_images/{self.__class__.__name__}.png', self.proc_im)
-        # -------------------------------------------------------------------------
-        self.pipeline_data['improc_progress'][self.__class__.__name__] = progress_data
-        # pprint(self.pipeline_data)
-        # print()
-        parent = self.master
-        next_frame_constructor = self.pipeline_data['relative_constructors'][
-            self.__class__.__name__]['following']
-        frame = next_frame_constructor(
-            parent, self.proc_im.copy(), self.pipeline_data)
-        self.destroy()
-        frame.grid(
-            row=0, column=0, rowspan=FRAME_ROWSPAN)
+        if self.data_directed:
+            parent = self.master
+            pipeline_data = self.pipeline_data
+            pipeline_data['destruction_procedure'](
+                self, pipeline_data)
+            pipeline_data['construction_procedure'](
+                parent, pipeline_data)
+        else:
+            self.pipeline_data['improc_params'][self.__class__.__name__] = self.param_data
+            progress_data = {
+                'og_im': self.og_im.copy(), 'proc_im': self.proc_im.copy()
+            }
+            # SAVE --------------------------------------------------------------------
+            cv.imwrite(f'improc_images/{self.__class__.__name__}.png', self.proc_im)
+            # -------------------------------------------------------------------------
+            self.pipeline_data['improc_progress'][self.__class__.__name__] = progress_data
+            # pprint(self.pipeline_data)
+            # print()
+            parent = self.master
+            next_frame_constructor = self.pipeline_data['relative_constructors'][
+                self.__class__.__name__]['following']
+            frame = next_frame_constructor(
+                parent, self.proc_im.copy(), self.pipeline_data)
+            self.destroy()
+            frame.grid(
+                row=0, column=0, rowspan=FRAME_ROWSPAN)
 
     def previous_stage(self):
         parent = self.master
@@ -156,8 +165,8 @@ class ImProcEditor(tk.Frame):
 ### WARPING ----------------------------------------------------------------------------      
 
 class WarpingEditor(ImProcEditor):
-    def __init__(self, master, cvim, pipeline_data):
-        super().__init__(master, cvim, pipeline_data)
+    def __init__(self, master, cvim, pipeline_data, data_directed=False):
+        super().__init__(master, cvim, pipeline_data, data_directed=data_directed)
         self.bind('<space>', self.apply_warp),
         self.augment_main_canvas_bindings([
             ('<Motion>', self.hover),
@@ -313,8 +322,8 @@ class WarpingEditor(ImProcEditor):
 ### ORTHOGONAL ROTATION --------------------------------------------------------------
 
 class OrthogonalRotationEditor(ImProcEditor):
-    def __init__(self, master, cvim, pipeline_data):
-        super().__init__(master, cvim, pipeline_data)
+    def __init__(self, master, cvim, pipeline_data, data_directed=False):
+        super().__init__(master, cvim, pipeline_data, data_directed=data_directed)
         self.add_label('angle')
         self.orthogonal_rotation_ticks = 0
         self.augment_main_canvas_bindings([
@@ -338,8 +347,8 @@ class OrthogonalRotationEditor(ImProcEditor):
 ### FINE ROTATION --------------------------------------------------------------
 
 class FineRotationEditor(ImProcEditor):
-    def __init__(self, master, cvim, pipeline_data):
-        super().__init__(master, cvim, pipeline_data)
+    def __init__(self, master, cvim, pipeline_data, data_directed=False):
+        super().__init__(master, cvim, pipeline_data, data_directed=data_directed)
         self.add_label('angle')
         self.fine_rotation_angle = 0 # degrees
         self.augment_main_canvas_bindings([
@@ -368,8 +377,8 @@ class FineRotationEditor(ImProcEditor):
 ### RESCALE -----------------------------------------------------------------------
 
 class RescaleEditor(ImProcEditor):
-    def __init__(self, master, cvim, pipeline_data):
-        super().__init__(master, cvim, pipeline_data)
+    def __init__(self, master, cvim, pipeline_data, data_directed=False):
+        super().__init__(master, cvim, pipeline_data, data_directed=data_directed)
         self.add_label('og_letter_height')
         self.roi_points = []
         self.letter_height_ys = []
@@ -468,8 +477,8 @@ class RescaleEditor(ImProcEditor):
 ### CROP -----------------------------------------------------------------------------
 
 class CropEditor(ImProcEditor):
-    def __init__(self, master, cvim, pipeline_data):
-        super().__init__(master, cvim, pipeline_data)
+    def __init__(self, master, cvim, pipeline_data, data_directed=False):
+        super().__init__(master, cvim, pipeline_data, data_directed=data_directed)
         self.selection_points = []
         self.selection_rectangle = self.main_canvas.create_rectangle(
             0, 0, 0, 0, outline=MAGENTA, width=LINE_WIDTH)
@@ -511,8 +520,8 @@ class CropEditor(ImProcEditor):
 
 class FilteringEditor(ImProcEditor):
     def __init__(self, master, cvim, pipeline_data, filter_function,
-                 allow_negative_kernel_size=False):
-        super().__init__(master, cvim, pipeline_data)
+                 allow_negative_kernel_size=False, data_directed=False):
+        super().__init__(master, cvim, pipeline_data, data_directed=data_directed)
         self.fltr = filter_function
         if allow_negative_kernel_size:
             self.min_kernel_size_assertion = lambda inst: True
@@ -572,21 +581,21 @@ class FilteringEditor(ImProcEditor):
 ### DENOISE -------------------------------------------------------------------------
 
 class DenoiseEditor(FilteringEditor):
-    def __init__(self, master, cvim, pipeline_data):
-        super().__init__(master, cvim, pipeline_data, denoise)
+    def __init__(self, master, cvim, pipeline_data, data_directed=False):
+        super().__init__(master, cvim, pipeline_data, denoise, data_directed=data_directed)
 
 ### DILATE ERODE ----------------------------------------------------------------
 
 class DilateErodeEditor(FilteringEditor):
-    def __init__(self, master, cvim, pipeline_data):
+    def __init__(self, master, cvim, pipeline_data, data_directed=False):
         super().__init__(master, cvim, pipeline_data, dilate_erode,
-                         allow_negative_kernel_size=True)
+                         allow_negative_kernel_size=True, data_directed=data_directed)
 
 ### THRESHOLD -------------------------------------------------------------------
 
 class ThresholdEditor(ImProcEditor):
-    def __init__(self, master, cvim, pipeline_data):
-        super().__init__(master, cvim, pipeline_data)
+    def __init__(self, master, cvim, pipeline_data, data_directed=False):
+        super().__init__(master, cvim, pipeline_data, data_directed=data_directed)
         self.block_size = 32 + 1
         self.constant = 5
         self.bw_im = cv.cvtColor(
