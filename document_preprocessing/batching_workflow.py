@@ -18,31 +18,6 @@ from frames import WarpingEditor, OrthogonalRotationEditor, FineRotationEditor, 
 from constants import *
 from im import display_cv
 
-project_folder = os.getcwd()
-subfolders = ['2022_06_26', '2022_06_27']
-input_folder = f'{project_folder}/test_data/levike_facturi_test/{subfolders[0]}'
-
-def compl_fname(fname):
-    return f'{input_folder}/{fname}'
-
-full_filenames = list(map(compl_fname,
-                          os.listdir(input_folder)))
-
-def read_im(filepath):
-    extension = filepath.split('.')[-1].lower()
-    if extension == 'pdf':
-        im = np.array(
-            convert_from_path(filepath)[0])
-    else:
-        im = cv.imread(filepath)
-    data = {
-        'fname': filepath.split('/')[-1],
-        'im': im
-    }
-    return data
-
-images_data = list(map(read_im, full_filenames[:2]))
-
 # def image_data__from_filepaths(filepaths):
 #     print("reading images ...")
 #     data = []
@@ -138,6 +113,23 @@ images_data = list(map(read_im, full_filenames[:2]))
 # #     'destruction_procedure': destruction_procedure,
 # # }
 
+
+def file_data__from_fname_x_folder(fname, folder):
+    return {
+        'fname': fname,
+        'folder': folder,
+        'fpath': f'{folder}/{fname}',
+    }
+
+def read_im(filepath):
+    extension = filepath.split('.')[-1].lower()
+    if extension == 'pdf':
+        im = np.array(
+            convert_from_path(filepath)[0])
+    else:
+        im = cv.imread(filepath)
+    return im
+
 preproc__constructor_from_stage_name = dict(
     zip(['warping', 'orthogonal_rotation',
          'fine_rotation', 'rescale', 'crop'],
@@ -147,28 +139,33 @@ preproc__constructor_from_stage_name = dict(
 # filename -> preproc_im
 # preproc_im :: (fname, proc_im, [(proc_name, proc_params)])
 
-preproc_stages = [
+transform_preproc_stages = [
     'warping' , 'orthogonal_rotation', 'fine_rotation', 'rescale', 'crop']
 
-def im__transform_pipeline_data__from__filename(
-        fname, fpath):
+def im__transform_pipeline_data__from__fdat_x_preproc_stgs(
+        file_data, preproc_stages):
+    fname = file_data['fname']
+    folder = file_data['folder']
+    fpath = file_data['fpath']
+
     extension = fname.split('.')[-1]
     fname_wo_extension = "".join(
         fname.split('.')[:-1])
     im = read_im(fpath)
+    pending_procs = preproc_stages.copy()
+    pending_procs.reverse()
     return {
-        'fname': fname, 'fpath': fpath,
+        'fname': fname, 'fpath': fpath, 'input_folder': folder,
         'fname_wo_extension': fname_wo_extension,
         'im': im,
-        'pending_procs': preproc_stages.copy(),
+        'pending_procs': pending_procs,
         'finished_proc_data': []
     }
-
 
 def transform_pipeline__destructor(frame):
     transform_pipeline_data = frame.transform_pipeline_data
     transform_pipeline_data['finished_proc_data'].append(
-        {'proc_name': frame.proc_name
+        {'proc_name': frame.proc_name,
          'proc_params': frame.param_data})
     gui_data = {'root': frame.master}
     frame.destroy()
@@ -184,6 +181,14 @@ def transform_pipeline__constructor(
     frame.grid(
         row=0, column=0, rowspan=FRAME_ROWSPAN)    
 
+def transform_pipeline__collector(
+        transform_pipeline_data, gui_data):
+    pass
+
+def transform_pipeline__progressor(
+        pipeline_data, gui_data):
+    pass
+
 def transform_pipeline__control_shift(frame):
     dest = transform_pipeline__destructor
     transform_pipeline_data, gui_data = dest(
@@ -194,22 +199,39 @@ def transform_pipeline__control_shift(frame):
     else:
         preproc_im_data = transform_pipeline__collector(
             transform_pipeline_data, gui_data)
-        
-        
-    
 
+def batch_processing_data__from_folder_x_preproc_stages(
+        folder, preproc_stages):
+    print('loading images and stuff...')
+    dat = im__transform_pipeline_data__from__fdat_x_preproc_stgs
+    batch_data = []
+    for fname in os.listdir(input_folder):
+        batch_data.append(
+            dat(
+                file_data__from_fname_x_folder(
+                    fname, input_folder),
+                preproc_stages))
+    return {
+        'batch_data': batch_data,
+        'control_shift': transform_pipeline__control_shift
+    }
 
-def transform_pipeline__collector(
-        transform_pipeline_data, gui_data):
-    pass
+if __name__ == '__main__':
+    print('batching_workflow')
 
-def transform_pipeline__progressor(
-        pipeline_data, gui_data):
-    pass
+    project_folder = os.getcwd()
 
+    subfolders = ['2022_06_26', '2022_06_27']
 
+    input_folder = "/".join([
+        project_folder, 'test_data',
+        'levike_facturi_test', subfolders[0]
+    ])
 
-root = tk.Tk()
-root.bind('<Control-q>', lambda event: root.destroy())
-# construction_procedure(root, pipeline_data)
+    bpd = batch_processing_data__from_folder_x_preproc_stages
+    batch_data = bpd(
+        input_folder, transform_preproc_stages)
+
+    root = tk.Tk()
+    root.bind('<Control-q>', lambda event: root.destroy())
 
