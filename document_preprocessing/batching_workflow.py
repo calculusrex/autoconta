@@ -211,8 +211,10 @@ def batch_processing_data__from_folder_x_preproc_stages(
                 file_data__from_fname_x_folder(
                     fname, input_folder),
                 preproc_stages))
+    batch_data.reverse()
     return {
-        'batch_data': batch_data,
+        'pending_document_data': batch_data,
+        'finished_document_data': []
         'control_shift': transform_pipeline__control_shift
     }
 
