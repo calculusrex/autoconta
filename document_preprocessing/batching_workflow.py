@@ -217,6 +217,8 @@ def construct_frame(state_data, gui_data):
     frame.grid(
         row=0, column=0, rowspan=FRAME_ROWSPAN)
 
+
+    
 def trnsfrm_ppln__collector(
         state_data, gui_data):
     pass
