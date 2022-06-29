@@ -51,15 +51,13 @@ def augment_data(dat1, dat2):
 ### GENERAL EDITOR --------------------------------------------------------------------
 
 class ImProcEditor(tk.Frame):
-    def __init__(self, master, image_data, pipeline_data, data_directed=False):
-        super().__init__(master)
-        self.data_directed = data_directed
-        self.pipeline_data = pipeline_data
-        self.grid(row=0, column=0, rowspan=FRAME_ROWSPAN)
-        self.og_im = image_data['im']
-        self.og_im_fname = image_data['fname']
-        
-        self.proc_im = image_data['im'].copy()
+    def __init__(self, state_data, gui_data):
+        super().__init__(gui_data['master'])
+        self.state_data = state_data
+
+        self.doc_data = self.state_data['cw_doc_data']
+        self.og_im = self.doc_data['im']
+        self.proc_im = self.og_im.copy()
         
         self.labels = {}
         self.add_label(self.__class__.__name__)
@@ -70,10 +68,14 @@ class ImProcEditor(tk.Frame):
 
         self.main_canvas = None
         self.main_canvas_bindings = [
-            ('<Motion>', lambda e: self.mouse_label_event_config(e, 'hover')),
-            ('<Button-1>', lambda e: self.mouse_label_event_config(e, 'click')),
-            ('<Escape>', self.cancel), ('<Control-c>', self.cancel),
-            ('<Control-z>', lambda e: self.previous_stage()),
+            ('<Motion>',
+             lambda e: self.mouse_label_event_config(e, 'hover')),
+            ('<Button-1>',
+             lambda e: self.mouse_label_event_config(e, 'click')),
+            ('<Escape>',
+             self.cancel), ('<Control-c>', self.cancel),
+            ('<Control-z>',
+             lambda e: self.previous_stage()),
         ]
         self.install_main_canvas()
 
@@ -165,11 +167,126 @@ class ImProcEditor(tk.Frame):
             row=0, column=0, rowspan=FRAME_ROWSPAN)
         
 
+# class ImProcEditor(tk.Frame):
+#     def __init__(self, master, image_data, pipeline_data, data_directed=False):
+#         super().__init__(master)
+#         self.data_directed = data_directed
+#         self.pipeline_data = pipeline_data
+#         self.grid(row=0, column=0, rowspan=FRAME_ROWSPAN)
+#         self.og_im = image_data['im']
+#         self.og_im_fname = image_data['fname']
+        
+#         self.proc_im = image_data['im'].copy()
+        
+#         self.labels = {}
+#         self.add_label(self.__class__.__name__)
+#         self.add_label('hover')
+#         self.add_label('click')
+
+#         self.bind('<space>', self.skip)
+
+#         self.main_canvas = None
+#         self.main_canvas_bindings = [
+#             ('<Motion>', lambda e: self.mouse_label_event_config(e, 'hover')),
+#             ('<Button-1>', lambda e: self.mouse_label_event_config(e, 'click')),
+#             ('<Escape>', self.cancel), ('<Control-c>', self.cancel),
+#             ('<Control-z>', lambda e: self.previous_stage()),
+#         ]
+#         self.install_main_canvas()
+
+#     def skip(self, event):
+#         self.param_data = {}
+#         self.next_stage()
+
+#     def add_label(self, key):
+#         self.labels[key] = tk.Label(self, text=key)
+#         self.labels[key].grid(
+#             row=len(self.labels) - 1, column=2)
+
+#     def mouse_label_event_config(self, event, label_key):
+#         self.labels[label_key].config(
+#             text=f'{label_key}\nx: {event.x}\ny: {event.y}')
+
+#     def load_bindings(self, widget, bindings):
+#         for keypress, function in bindings:
+#             widget.bind(keypress, function)
+
+#     def augment_main_canvas_bindings(self, additional_bindings):
+#         self.load_bindings(
+#             self.main_canvas, additional_bindings)
+#         self.main_canvas_bindings.extend(
+#             additional_bindings)
+
+#     def install_main_canvas(self):
+#         self.main_canvas = DocumentCanvas(
+#             self, self.proc_im)
+#         self.main_canvas.grid(row=0, column=0, rowspan=FRAME_ROWSPAN)
+#         self.load_bindings(
+#             self.main_canvas, self.main_canvas_bindings)
+#         self.main_canvas.focus_set()
+
+#     def update_main_canvas(self, grid_offset=None):
+#         self.main_canvas.destroy()
+#         self.install_main_canvas()
+#         if grid_offset:
+#             self.main_canvas.install_grid(
+#                 offset=grid_offset)
+
+#     def cancel(self, event):
+#         parent = self.master
+#         frame_constructor = self.__class__
+#         frame = frame_constructor(parent, self.og_im.copy(), self.pipeline_data)
+#         self.destroy()
+#         frame.grid(
+#             row=0, column=0, rowspan=FRAME_ROWSPAN)
+
+#     def next_stage(self):
+#         if self.data_directed:
+#             parent = self.master
+#             pipeline_data = self.pipeline_data
+#             pipeline_data['destruction_procedure'](
+#                 self, pipeline_data)
+#             pipeline_data['construction_procedure'](
+#                 parent, pipeline_data)
+#         else:
+#             self.pipeline_data['improc_params'][self.__class__.__name__] = self.param_data
+#             progress_data = {
+#                 'og_im': self.og_im.copy(), 'proc_im': self.proc_im.copy()
+#             }
+#             # SAVE --------------------------------------------------------------------
+#             cv.imwrite(f'improc_images/{self.__class__.__name__}.png', self.proc_im)
+#             # -------------------------------------------------------------------------
+#             self.pipeline_data['improc_progress'][self.__class__.__name__] = progress_data
+#             # pprint(self.pipeline_data)
+#             # print()
+#             parent = self.master
+#             next_frame_constructor = self.pipeline_data['relative_constructors'][
+#                 self.__class__.__name__]['following']
+#             frame = next_frame_constructor(
+#                 parent, self.proc_im.copy(), self.pipeline_data)
+#             self.destroy()
+#             frame.grid(
+#                 row=0, column=0, rowspan=FRAME_ROWSPAN)
+
+#     def previous_stage(self):
+#         parent = self.master
+#         previous_frame_constructor = self.pipeline_data['relative_constructors'][
+#             self.__class__.__name__]['previous']
+#         frame = previous_frame_constructor(
+#             parent,
+#             self.pipeline_data[
+#                 'improc_progress'][previous_frame_constructor.__name__]['og_im'],
+#             self.pipeline_data)
+#         self.destroy()
+#         frame.grid(
+#             row=0, column=0, rowspan=FRAME_ROWSPAN)
+        
+
 ### WARPING ----------------------------------------------------------------------------      
 
 class WarpingEditor(ImProcEditor):
-    def __init__(self, master, image_data, pipeline_data, data_directed=False):
-        super().__init__(master, image_data, pipeline_data, data_directed=data_directed)
+    def __init__(self, state_data, gui_data):
+        super().__init__(state_data, gui_data)
 
         self.augment_main_canvas_bindings([
             ('<Motion>', self.hover),
@@ -255,20 +372,32 @@ class WarpingEditor(ImProcEditor):
             row=0, column=1, rowspan=FRAME_ROWSPAN)
         self.tuning_canvas_bindings = [
             ('<Motion>', self.tuning_hover),
-            ('<Button-4>', lambda e: self.tune(e, 16, radial_direction='outward')),
-            ('<Button-5>', lambda e: self.tune(e, 16, radial_direction='inward')),
-            ('<Shift-Button-4>', lambda e: self.tune(e, 4, radial_direction='outward')),
-            ('<Shift-Button-5>', lambda e: self.tune(e, 4, radial_direction='inward')),
+            ('<Button-4>',
+             lambda e: self.tune(e,16,radial_direction='outward')),
+            ('<Button-5>',
+             lambda e: self.tune(e,16,radial_direction='inward')),
+            ('<Shift-Button-4>',
+             lambda e: self.tune(e,4,radial_direction='outward')),
+            ('<Shift-Button-5>',
+             lambda e: self.tune(e,4,radial_direction='inward')),
         ]
         self.additional_main_frame_bindings = [
-            ('w', lambda e: self.tune(e, 16, cartesian_direction=(0, -1))),
-            ('a', lambda e: self.tune(e, 16, cartesian_direction=(-1, 0))),
-            ('s', lambda e: self.tune(e, 16, cartesian_direction=(0, 1))),
-            ('d', lambda e: self.tune(e, 16, cartesian_direction=(1, 0))),
-            ('W', lambda e: self.tune(e, 4, cartesian_direction=(0, -1))),
-            ('A', lambda e: self.tune(e, 4, cartesian_direction=(-1, 0))),
-            ('S', lambda e: self.tune(e, 4, cartesian_direction=(0, 1))),
-            ('D', lambda e: self.tune(e, 4, cartesian_direction=(1, 0))),
+            ('w',
+             lambda e: self.tune(e,16,cartesian_direction=(0,-1))),
+            ('a',
+             lambda e: self.tune(e,16,cartesian_direction=(-1,0))),
+            ('s',
+             lambda e: self.tune(e,16,cartesian_direction=(0,1))),
+            ('d',
+             lambda e: self.tune(e,16,cartesian_direction=(1,0))),
+            ('W',
+             lambda e: self.tune(e,4,cartesian_direction=(0,-1))),
+            ('A',
+             lambda e: self.tune(e,4,cartesian_direction=(-1,0))),
+            ('S',
+             lambda e: self.tune(e,4,cartesian_direction=(0,1))),
+            ('D',
+             lambda e: self.tune(e,4,cartesian_direction=(1,0))),
         ]
 
         self.load_bindings(
@@ -279,7 +408,6 @@ class WarpingEditor(ImProcEditor):
             0, 0, 0, 0, outline=MAGENTA, width=LINE_WIDTH)
 
         self.focus_set()
-
         self.tuning_canvas.install_crosshairs()
 
     def update_tuning_canvas(self):
@@ -344,8 +472,8 @@ class WarpingEditor(ImProcEditor):
 ### ORTHOGONAL ROTATION --------------------------------------------------------------
 
 class OrthogonalRotationEditor(ImProcEditor):
-    def __init__(self, master, image_data, pipeline_data, data_directed=False):
-        super().__init__(master, image_data, pipeline_data, data_directed=data_directed)
+    def __init__(self, state_data, gui_data):
+        super().__init__(state_data, gui_data)
         self.add_label('angle')
         self.orthogonal_rotation_ticks = 0
         self.augment_main_canvas_bindings([
@@ -363,14 +491,16 @@ class OrthogonalRotationEditor(ImProcEditor):
         self.update_main_canvas()
 
     def apply_orthogonal_rotation(self, event):
-        self.param_data = {'orthogonal_rotation_ticks': self.orthogonal_rotation_ticks}
+        self.param_data = {
+            'orthogonal_rotation_ticks': self.orthogonal_rotation_ticks}
         self.next_stage()
 
 ### FINE ROTATION --------------------------------------------------------------
 
 class FineRotationEditor(ImProcEditor):
-    def __init__(self, master, image_data, pipeline_data, data_directed=False):
-        super().__init__(master, image_data, pipeline_data, data_directed=data_directed)
+    def __init__(self, state_data, gui_data):
+        super().__init__(state_data, gui_data)
+
         self.add_label('angle')
         self.fine_rotation_angle = 0 # degrees
         self.augment_main_canvas_bindings([
@@ -399,8 +529,9 @@ class FineRotationEditor(ImProcEditor):
 ### RESCALE -----------------------------------------------------------------------
 
 class RescaleEditor(ImProcEditor):
-    def __init__(self, master, image_data, pipeline_data, data_directed=False):
-        super().__init__(master, image_data, pipeline_data, data_directed=data_directed)
+    def __init__(self, state_data, gui_data):
+        super().__init__(state_data, gui_data)
+
         self.add_label('og_letter_height')
         self.roi_points = []
         self.letter_height_ys = []
@@ -499,8 +630,8 @@ class RescaleEditor(ImProcEditor):
 ### CROP -----------------------------------------------------------------------------
 
 class CropEditor(ImProcEditor):
-    def __init__(self, master, image_data, pipeline_data, data_directed=False):
-        super().__init__(master, image_data, pipeline_data, data_directed=data_directed)
+    def __init__(self, state_data, gui_data):
+        super().__init__(state_data, gui_data)
         self.selection_points = []
         self.selection_rectangle = self.main_canvas.create_rectangle(
             0, 0, 0, 0, outline=MAGENTA, width=LINE_WIDTH)
@@ -541,8 +672,8 @@ class CropEditor(ImProcEditor):
 ### FILTERING EDITOR ---------------------------------------------------------------
 
 class FilteringEditor(ImProcEditor):
-    def __init__(self, master, image_data, pipeline_data, filter_function,
-                 allow_negative_kernel_size=False, data_directed=False):
+    def __init__(self, state_data, gui_data, filter_function,
+                 allow_negative_kernel_size=False):
         super().__init__(master, image_data, pipeline_data, data_directed=data_directed)
         self.fltr = filter_function
         if allow_negative_kernel_size:
@@ -603,22 +734,24 @@ class FilteringEditor(ImProcEditor):
 ### DENOISE -------------------------------------------------------------------------
 
 class DenoiseEditor(FilteringEditor):
-    def __init__(self, master, image_data, pipeline_data, data_directed=False):
-        super().__init__(master, image_data, pipeline_data, denoise,
-                         data_directed=data_directed)
+    def __init__(self, state_data, gui_data):
+        super().__init__(
+            state_data, gui_data, denoise)
 
 ### DILATE ERODE ----------------------------------------------------------------
 
 class DilateErodeEditor(FilteringEditor):
-    def __init__(self, master, image_data, pipeline_data, data_directed=False):
-        super().__init__(master, image_data, pipeline_data, dilate_erode,
-                         allow_negative_kernel_size=True, data_directed=data_directed)
+    def __init__(self, state_data, gui_data):
+        super().__init__(
+            state_data, gui_data,
+            dilate_erode, allow_negative_kernel_size=True)
 
 ### THRESHOLD -------------------------------------------------------------------
 
 class ThresholdEditor(ImProcEditor):
-    def __init__(self, master, image_data, pipeline_data, data_directed=False):
-        super().__init__(master, image_data, pipeline_data, data_directed=data_directed)
+    def __init__(self, state_data, gui_data):
+        super().__init__(state_data, gui_data)
+
         self.block_size = 32 + 1
         self.constant = 5
         self.bw_im = cv.cvtColor(

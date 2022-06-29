@@ -142,80 +142,120 @@ preproc__constructor_from_stage_name = dict(
 transform_preproc_stages = [
     'warping' , 'orthogonal_rotation', 'fine_rotation', 'rescale', 'crop']
 
-def im__transform_pipeline_data__from__fdat_x_preproc_stgs(
+def doc_data__from__fdat_x_preproc_stgs(
         file_data, preproc_stages):
     fname = file_data['fname']
     folder = file_data['folder']
     fpath = file_data['fpath']
-
     extension = fname.split('.')[-1]
     fname_wo_extension = "".join(
         fname.split('.')[:-1])
+
+    file_data = {
+        'fname': fname, 'fpath': fpath,
+        'input_folder': folder,
+        'fname_wo_extension': fname_wo_extension,
+        'extension': extension
+    }
+
     im = read_im(fpath)
     pending_procs = preproc_stages.copy()
     pending_procs.reverse()
-    return {
-        'fname': fname, 'fpath': fpath, 'input_folder': folder,
-        'fname_wo_extension': fname_wo_extension,
+    proc_data = {
+        'sequence': preproc_stages,
+        'pending': pending_procs,
+        'current': 'interproc',
+        'finished': [],
         'im': im,
-        'pending_procs': pending_procs,
-        'finished_proc_data': []
     }
 
-def transform_pipeline__destructor(frame):
-    transform_pipeline_data = frame.transform_pipeline_data
-    transform_pipeline_data['finished_proc_data'].append(
-        {'proc_name': frame.proc_name,
-         'proc_params': frame.param_data})
-    gui_data = {'root': frame.master}
+    return {
+        'file': file_data,
+        'proc': proc_data
+    }
+
+# def trnsfrm_ppln__destructor(frame):
+#     state_data = frame.state_data
+#     state_data['finished_proc_data'].append(
+#         {'proc_name': frame.proc_name,
+#          'proc_params': frame.param_data})
+#     gui_data = {'master': frame.master}
+#     frame.destroy()
+#     return state_data, gui_data
+
+# def trnsfrm_ppln__constructor(
+#         state_data, gui_data):
+#     frame_constructor = preproc__constructor_from_stage_name[
+#         state_data[
+#             'pending_procs'].pop()]
+#     frame = frame_constructor(
+#         state_data, gui_data)
+#     frame.grid(
+#         row=0, column=0, rowspan=FRAME_ROWSPAN)    
+
+def destruct_frame(frame):
+    state_data = frame.state_data
+    doc_dat = state_data['cw_doc_data']
+    current_proc_dat = {
+        'key': frame.proc_key,
+        'params': frame.param_data}
+    doc_dat['im'] = frame.proc_im
+    doc_dat['proc']['current'] = 'interproc'
+    doc_dat['proc']['finished'].append(
+        current_proc_dat)
+    gui_data = {'master': frame.master}
     frame.destroy()
-    return transform_pipeline_data, gui_data
+    return state_data, gui_data
 
-def transform_pipeline__constructor(
-        transform_pipeline_data, gui_data):
+def construct_frame(state_data, gui_data):
+    doc_dat = state_data['cw_doc_data']
+    key = doc_dat['proc']['pending'].pop()
+    doc_dat['proc']['current'] = key
     frame_constructor = preproc__constructor_from_stage_name[
-        transform_pipeline_data[
-            'pending_procs'].pop()]
-    frame = frame_constructor(
-        transform_pipeline_data, gui_data)
+        doc_dat['proc']['current']]
+    frame = frame_constructor(state_data, gui_data)
     frame.grid(
-        row=0, column=0, rowspan=FRAME_ROWSPAN)    
+        row=0, column=0, rowspan=FRAME_ROWSPAN)
 
-def transform_pipeline__collector(
-        transform_pipeline_data, gui_data):
+def trnsfrm_ppln__collector(
+        state_data, gui_data):
     pass
 
-def transform_pipeline__progressor(
+def trnsfrm_ppln__progressor(
         pipeline_data, gui_data):
     pass
 
-def transform_pipeline__control_shift(frame):
-    dest = transform_pipeline__destructor
-    transform_pipeline_data, gui_data = dest(
-        frame)
-    if transform_pipeline_data['pending_procs']: # not empty
-        transform_pipeline__constructor(
-            transform_pipeline_data, gui_data)
-    else:
-        preproc_im_data = transform_pipeline__collector(
-            transform_pipeline_data, gui_data)
+# def is_curr_document_done(state_data):
+#     state_data['x']
 
-def batch_processing_data__from_folder_x_preproc_stages(
+def trnsfrm_ppln__control_shift(frame):
+    dest = trnsfrm_ppln__destructor
+    state_data, gui_data = dest(
+        frame)
+    if state_data['pending_procs']: # not empty
+        trnsfrm_ppln__constructor(
+            state_data, gui_data)
+    else:
+        preproc_im_data = trnsfrm_ppln__collector(
+            state_data, gui_data)
+
+def state_data__from_folder_x_preproc_stages(
         folder, preproc_stages):
     print('loading images and stuff...')
-    dat = im__transform_pipeline_data__from__fdat_x_preproc_stgs
-    batch_data = []
+    doc_dat_dat__ = doc_data__from__fdat_x_preproc_stgs
+    pending_doc_data = []
     for fname in os.listdir(input_folder):
-        batch_data.append(
-            dat(
+        pending_doc_data.append(
+            doc_dat__(
                 file_data__from_fname_x_folder(
                     fname, input_folder),
                 preproc_stages))
-    batch_data.reverse()
+    pending_doc_data.reverse()
     return {
-        'pending_document_data': batch_data,
-        'finished_document_data': []
-        'control_shift': transform_pipeline__control_shift
+        'pending_doc_data': pending_doc_data,
+        'cw_doc_data': {},
+        'finished_doc_data': [],
+        'control_shift': trnsfrm_ppln__control_shift
     }
 
 if __name__ == '__main__':
@@ -230,8 +270,8 @@ if __name__ == '__main__':
         'levike_facturi_test', subfolders[0]
     ])
 
-    bpd = batch_processing_data__from_folder_x_preproc_stages
-    batch_data = bpd(
+    sd = state_data__from_folder_x_preproc_stages
+    state_data = sd(
         input_folder, transform_preproc_stages)
 
     root = tk.Tk()
