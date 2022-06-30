@@ -688,7 +688,7 @@ class CropEditor(ImProcEditor):
 class FilteringEditor(ImProcEditor):
     def __init__(self, state_data, gui_data, filter_function,
                  allow_negative_kernel_size=False):
-        super().__init__(master, image_data, pipeline_data, data_directed=data_directed)
+        super().__init__(state_data, gui_data)
         self.fltr = filter_function
         if allow_negative_kernel_size:
             self.min_kernel_size_assertion = lambda inst: True

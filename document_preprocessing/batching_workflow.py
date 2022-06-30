@@ -4,6 +4,8 @@ import os
 import cv2 as cv
 import numpy as np
 from PIL import Image
+from copy import deepcopy
+import functools as ft
 
 from pdf2image import convert_from_path, convert_from_bytes
 
@@ -21,10 +23,20 @@ from im import display_cv
 # ----------------------------------------------------------------
 # PIPELINE
 
-def file_data__from_fname_x_folder(fname, folder):
+def folder_data__(project_folder, subfolder_path)    
+    input_folder = "/".join([
+        project_folder, subfolder_path
+    ])
+    return {
+        'project_folder': project_folder,
+        'subfolder_chain': subfolder_path,
+        'input_folder': input_folder,
+    }
+
+def file_data__from_fname_x_folder(fname, folder_data):
     return {
         'fname': fname,
-        'folder': folder,
+        'folder': folder_data,
         'fpath': f'{folder}/{fname}',
     }
 
@@ -37,22 +49,38 @@ def read_im(filepath):
         im = cv.imread(filepath)
     return im
 
-preproc__constructor_from_stage_name = dict(
-    zip(['warping', 'orthogonal_rotation',
-         'fine_rotation', 'rescale', 'crop'],
-        [WarpingEditor, OrthogonalRotationEditor,
-         FineRotationEditor, RescaleEditor, CropEditor]))
+stage_keys_x_constructors = {
+    'warping': WarpingEditor,
+    'orthogonal_rotation': OrthogonalRotationEditor,
+    'fine_rotation': FineRotationEditor,
+    'rescale': RescaleEditor,
+    'crop': CropEditor,
+    'denoise': DenoiseEditor,
+    'dilate_erode': DilateErodeEditor,
+    'threshold': ThresholdEditor,
+}
+
+def constructor_from_stage_key(key):
+    return stage_keys_x_constructors[key]
 
 # filename -> preproc_im
 # preproc_im :: (fname, proc_im, [(proc_name, proc_params)])
 
 transform_preproc_stages = [
-    'warping' , 'orthogonal_rotation', 'fine_rotation', 'rescale', 'crop']
+    'warping' , 'orthogonal_rotation',
+    'fine_rotation', 'rescale', 'crop']
 
-def doc_data__from__fdat_x_preproc_stgs(
-        file_data, preproc_stages):
+filter_preproc_stages = [
+    'denoise' , 'dilate_erode', 'threshold']
+
+document_preprocessing_pipeline = [
+    transform_preproc_stages, filter_preproc_stages,
+]
+
+def doc_data__from__fdat_x_pipelines(
+        file_data, pipelines):
     fname = file_data['fname']
-    folder = file_data['folder']
+    folder_data = file_data['folder']
     fpath = file_data['fpath']
     extension = fname.split('.')[-1]
     fname_wo_extension = "".join(
@@ -60,17 +88,20 @@ def doc_data__from__fdat_x_preproc_stgs(
 
     file_data = {
         'fname': fname, 'fpath': fpath,
-        'input_folder': folder,
+        'input_folder_data': folder_data,
         'fname_wo_extension': fname_wo_extension,
         'extension': extension
     }
 
     im = read_im(fpath)
-    pending_procs = preproc_stages.copy()
+    pending_pipelines = deepcopy(pipelines)
+    pending_pipelines.reverse()
+    pending_procs = pending_pipelines.pop()
     pending_procs.reverse()
     proc_data = {
-        'sequence': preproc_stages,
-        'pending': pending_procs,
+        'pipelines': pipelines,
+        'pending_pipelines': pending_pipelines,
+        'pending_procs': pending_procs,
         'current': 'interproc',
         'finished': [],
         'im': im,
@@ -81,14 +112,56 @@ def doc_data__from__fdat_x_preproc_stgs(
         'proc': proc_data
     }
 
+def state_data__from_folder_x_pipelines(
+        input_folder_data, pipelines, n_files=0):
+    print('loading images and stuff...')
+    pending_doc_data = []
+    fnames = os.listdir(
+        input_folder_data['input_folder'])
+    if n_files != 0: # DEVELOPMENT / DEBUGGING
+        fnames = list(
+            np.random.choice(
+                fnames, (n_files)))
+    doc_dat__ = doc_data__from__fdat_x_pipelines
+    for fname in fnames:
+        pending_doc_data.append(
+            doc_dat__(
+                file_data__from_fname_x_folder(
+                    fname, input_folder_data),
+                pipelines))
+    pending_doc_data.reverse()
+    return {
+        'pending_doc_data': pending_doc_data,
+        'cw_doc_data': {},
+        'finished_doc_data': [],
+        'control_shift': control_shift
+    }
+
 def is_curr_doc_ppln_done(state_data):
     doc_dat = state_data['cw_doc_data']
     return not(bool(
-        doc_dat['proc']['pending']))
+        doc_dat['proc']['pending_procs']))
 
 def is_batch_done(state_data):
     return not(bool(
         state_data['pending_doc_data']))
+
+def are_no_pending_procs(document_data):
+    return not(
+        bool(
+            document_data['proc']['pending_procs']))
+
+def are_all_pplns_done(doc_dat):
+    return not(
+        bool(doc_dat['proc']['pending_pipelines']))
+
+def batch__are_all_pplns_done(state_data):
+    doc_data = state_data['finished_doc_data']
+    return ft.reduce(
+        lambda a, b: a and b,
+        map(are_all_pplns_done,
+            doc_data),
+        True)
 
 def destruct_frame(frame):
     state_data = frame.state_data
@@ -104,12 +177,21 @@ def destruct_frame(frame):
     frame.destroy()
     return state_data, gui_data
 
+def load_next_pipeline(document_data):
+    # assert(
+    #     not(bool(document_data['proc']['pending_procs'])))
+    ppln = document_data['proc']['pending_pipelines'].pop()
+    ppln.reverse()
+    document_data['proc']['pending_procs'] = ppln
+
 def deploy_next_ppln_frame(state_data, gui_data):
     doc_dat = state_data['cw_doc_data']
-    key = doc_dat['proc']['pending'].pop()
+    if are_no_pending_procs(doc_dat):
+        load_next_pipeline(doc_dat)
+    key = doc_dat['proc']['pending_procs'].pop()
     doc_dat['proc']['current'] = key
-    frame_constructor = preproc__constructor_from_stage_name[
-        doc_dat['proc']['current']]
+    frame_constructor = constructor_from_stage_key(
+        doc_dat['proc']['current'])
     frame = frame_constructor(state_data, gui_data)
     frame.grid(
         row=0, column=0, rowspan=FRAME_ROWSPAN)
@@ -126,6 +208,47 @@ def process_next_doc(state_data, gui_data):
     deploy_next_ppln_frame(
         state_data, gui_data)
     
+def batch__load_next_pipeline(state_data):
+    doc_data = state_data['finished_doc_data']
+    for doc_dat in doc_data:
+        load_next_pipeline(doc_dat)
+    doc_data.reverse()
+    state_data['pending_doc_data'] = doc_data
+    state_data['finished_doc_data'] = []
+    
+def process_next_ppln(state_data, gui_data):
+    batch__load_next_pipeline(state_data)
+    process_next_doc(
+        state_data, gui_data)
+
+def write_out(state_data, folder):
+    for doc_data in state_data['finished_doc_data']:
+        out_folder_path = "/".join([
+            doc_data['file']['folder']['project_folder'],
+            "__".join([
+                doc_data['file']['folder']['subfolder_chain'],
+                "out"])])
+        if not(os.path.isdir(out_folder_path)):
+            os.makedirs(out_folder_path)
+        out_im_folder_path = "/".join([
+            out_folder_path, "images"])
+        out_meta_folder_path = "/".join([
+            out_folder_path, "metadata"])
+
+        im_fname = ".".join([
+            "__".join([
+                doc_data['file']['fname_wo_extension'],
+                "im_out"]),
+            "png"])
+        meta_fname = ".".join([
+            "__".join([
+                doc_data['file']['fname_wo_extension'],
+                "improc_metadata"]),
+            "json"])
+
+        im_path = "/".join([
+            doc_data['file']['fpath'], im_fname)
+    
 def control_shift(frame):
     state_data, gui_data = destruct_frame(
         frame)
@@ -137,42 +260,17 @@ def control_shift(frame):
             state_data, gui_data)
         process_next_doc(
             state_data, gui_data)
+    elif not(batch__are_all_pplns_done(state_data)):
+        stash_current_doc_data(
+            state_data, gui_data)
+        process_next_ppln(
+            state_data, gui_data)
     else:
         stash_current_doc_data(
             state_data, gui_data)
         write_out(state_data)
-    
-def trnsfrm_ppln__collector(
-        state_data, gui_data):
-    pass
 
-def trnsfrm_ppln__progressor(
-        pipeline_data, gui_data):
-    pass
 
-def state_data__from_folder_x_preproc_stages(
-        input_folder, preproc_stages, n_files=0):
-    print('loading images and stuff...')
-    doc_dat__ = doc_data__from__fdat_x_preproc_stgs
-    pending_doc_data = []
-    fnames = os.listdir(input_folder)
-    if n_files != 0: # DEVELOPMENT / DEBUGGING
-        fnames = list(
-            np.random.choice(
-                fnames, (n_files)))
-    for fname in fnames:
-        pending_doc_data.append(
-            doc_dat__(
-                file_data__from_fname_x_folder(
-                    fname, input_folder),
-                preproc_stages))
-    pending_doc_data.reverse()
-    return {
-        'pending_doc_data': pending_doc_data,
-        'cw_doc_data': {},
-        'finished_doc_data': [],
-        'control_shift': control_shift
-    }
 
 if __name__ == '__main__':
     print('batching_workflow')
@@ -181,15 +279,18 @@ if __name__ == '__main__':
 
     subfolders = ['2022_06_26', '2022_06_27']
 
-    input_folder = "/".join([
-        project_folder, 'test_data',
-        'levike_facturi_test', subfolders[0]
-    ])
+    subfolder_path = "/".join([
+        'test_data',
+        'levike_facturi_test',
+        subfolders[0]])
 
-    sd = state_data__from_folder_x_preproc_stages
+    input_folder_data = folder_data__(
+        project_folder, subfolder_path)
+
+    sd = state_data__from_folder_x_pipelines
     state_data = sd(
-        input_folder, transform_preproc_stages,
-        n_files=3)
+        input_folder_data, document_preprocessing_pipeline,
+        n_files=2)
 
     root = tk.Tk()
     root.bind('<Control-q>', lambda event: root.destroy())
