@@ -18,101 +18,8 @@ from frames import WarpingEditor, OrthogonalRotationEditor, FineRotationEditor, 
 from constants import *
 from im import display_cv
 
-# def image_data__from_filepaths(filepaths):
-#     print("reading images ...")
-#     data = []
-#     for filepath in filepaths:
-#         im = read_im(filepath)
-#         data.append(
-#             {'og_im': im}
-#         )
-#         print("read: ", filepath)
-#     return data
-
-# image_data = image_data__from_filepaths(
-#     full_filenames)
-
-
-# ---------------------------------------------------------------------------------
+# ----------------------------------------------------------------
 # PIPELINE
-
-# --------------------------------
-# WARPING
-
-# def destruction_procedure(frame, pipeline_data):
-#     # display_cv(frame.proc_im)
-#     progress_data = {
-#         'param_data': frame.param_data,
-#         'processed_image': frame.proc_im,
-#         'original_image_fname': frame.og_im_fname,
-#     }
-#     pipeline_data['progress_sequence'].append(
-#         progress_data)
-#     parent = frame.master
-#     frame.destroy()
-#     return parent, pipeline_data
-
-# def construction_procedure(parent, pipeline_data):
-#     if len(pipeline_data['construction_sequence']) == 0 and len(pipeline_data['pipeline_constructor_sequence']) == 0:
-#         for document_data in pipeline_data['progress_sequence']:
-#             out_fpath = "/".join([
-#                 OUTPUT_FOLDER,
-#                 ".".join([
-#                     document_data['original_image_fname'].split(
-#                         ".")[0],
-#                     "png"])])
-#             cv.imwrite(
-#                 out_fpath,
-#                 document_data['processed_image'])
-#             print(f"written: {out_fpath}")
-
-#     else:
-#         if len(pipeline_data['pipeline_constructor_sequence']) == 0:
-#             pipeline_sequence_data = pipeline_data['construction_sequence'].pop()
-#             pipeline_data['pipeline_constructor_sequence'] = pipeline_sequence_data[
-#                 'pipeline_constructors']
-#             image_data = current_sequence_data['image_data']
-#             pipeline_data['current_original_image_data'] = image_data
-#             pipeline_data['current_improc_progress'] = []
-
-#         image_data = pipeline_data['current_improc_progress'][-1]
-#         constructor = pipeline_data['pipeline_constructor_sequence'].pop()
-#         frame = constructor(
-#             parent, image_data, pipeline_data, data_directed=True)
-#         frame.grid(
-#             row=0, column=0, rowspan=FRAME_ROWSPAN)
-        
-        
-
-# frame_constructors =  [
-#         WarpingEditor, OrthogonalRotationEditor,
-#         FineRotationEditor, RescaleEditor, CropEditor
-# ]
-# frame_constructors.reverse()
-
-# pipeline_data = {
-#     'frame_constructors': frame_constructors,
-#     'construction_sequence': []
-#     'progress_sequence': [],
-#     'construction_procedure': construction_procedure,
-#     'destruction_procedure': destruction_procedure,
-# }
-
-# for image_data in images_data:
-#     pipeline_data['construction_sequence'].append(
-#         pipeline_data.append({
-#             'image_data': image_data,
-#             'pipeline_constructors': frame_constructors.copy()
-#         }))
-
-# # pipeline_data = {
-# #     'frame_constructor': WarpingEditor,
-# #     'construction_sequence': images_data,
-# #     'progress_sequence': [],
-# #     'construction_procedure': construction_procedure,
-# #     'destruction_procedure': destruction_procedure,
-# # }
-
 
 def file_data__from_fname_x_folder(fname, folder):
     return {
@@ -173,25 +80,6 @@ def doc_data__from__fdat_x_preproc_stgs(
         'file': file_data,
         'proc': proc_data
     }
-
-# def trnsfrm_ppln__destructor(frame):
-#     state_data = frame.state_data
-#     state_data['finished_proc_data'].append(
-#         {'proc_name': frame.proc_name,
-#          'proc_params': frame.param_data})
-#     gui_data = {'master': frame.master}
-#     frame.destroy()
-#     return state_data, gui_data
-
-# def trnsfrm_ppln__constructor(
-#         state_data, gui_data):
-#     frame_constructor = preproc__constructor_from_stage_name[
-#         state_data[
-#             'pending_procs'].pop()]
-#     frame = frame_constructor(
-#         state_data, gui_data)
-#     frame.grid(
-#         row=0, column=0, rowspan=FRAME_ROWSPAN)    
 
 def is_curr_doc_ppln_done(state_data):
     doc_dat = state_data['cw_doc_data']
@@ -261,20 +149,6 @@ def trnsfrm_ppln__collector(
 def trnsfrm_ppln__progressor(
         pipeline_data, gui_data):
     pass
-
-# def is_curr_document_done(state_data):
-#     state_data['x']
-
-# def trnsfrm_ppln__control_shift(frame):
-#     dest = trnsfrm_ppln__destructor
-#     state_data, gui_data = dest(
-#         frame)
-#     if state_data['pending_procs']: # not empty
-#         trnsfrm_ppln__constructor(
-#             state_data, gui_data)
-#     else:
-#         preproc_im_data = trnsfrm_ppln__collector(
-#             state_data, gui_data)
 
 def state_data__from_folder_x_preproc_stages(
         input_folder, preproc_stages, n_files=0):
