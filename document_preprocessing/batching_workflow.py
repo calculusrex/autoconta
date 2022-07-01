@@ -6,6 +6,7 @@ import numpy as np
 from PIL import Image
 from copy import deepcopy
 import functools as ft
+import json
 
 from pdf2image import convert_from_path, convert_from_bytes
 
@@ -23,7 +24,7 @@ from im import display_cv
 # ----------------------------------------------------------------
 # PIPELINE
 
-def folder_data__(project_folder, subfolder_path)    
+def folder_data__(project_folder, subfolder_path):
     input_folder = "/".join([
         project_folder, subfolder_path
     ])
@@ -34,10 +35,11 @@ def folder_data__(project_folder, subfolder_path)
     }
 
 def file_data__from_fname_x_folder(fname, folder_data):
+    input_folder = folder_data['input_folder']
     return {
         'fname': fname,
         'folder': folder_data,
-        'fpath': f'{folder}/{fname}',
+        'fpath': f'{input_folder}/{fname}',
     }
 
 def read_im(filepath):
@@ -88,7 +90,7 @@ def doc_data__from__fdat_x_pipelines(
 
     file_data = {
         'fname': fname, 'fpath': fpath,
-        'input_folder_data': folder_data,
+        'folder': folder_data,
         'fname_wo_extension': fname_wo_extension,
         'extension': extension
     }
@@ -221,33 +223,84 @@ def process_next_ppln(state_data, gui_data):
     process_next_doc(
         state_data, gui_data)
 
-def write_out(state_data, folder):
+def output_root_folder(doc_data):
+    out_folder_path = "/".join([
+        doc_data['file']['folder']['project_folder'],
+        "__".join([
+            doc_data['file']['folder']['subfolder_chain'],
+            "out"])])
+    if not(os.path.isdir(out_folder_path)):
+        os.makedirs(out_folder_path)
+    return out_folder_path
+
+def output_doc_folders(doc_data, root_folder):
+    out_im_folder_path = "/".join([
+        root_folder, "images"])
+    out_meta_folder_path = "/".join([
+        root_folder, "metadata"])
+    for folder_path in [
+            root_folder,
+            out_im_folder_path, out_meta_folder_path]:
+        if not(os.path.isdir(folder_path)):
+            os.makedirs(folder_path)
+    return {
+        'im': out_im_folder_path,
+        'meta': out_meta_folder_path,
+    }        
+
+def output_doc_paths(doc_data, root_folder):
+    folders = output_doc_folders(
+        doc_data, root_folder)
+    im_fname = ".".join([
+        "__".join([
+            doc_data['file']['fname_wo_extension'],
+            "im_out"]),
+        "png"])
+    meta_fname = ".".join([
+        "__".join([
+            doc_data['file']['fname_wo_extension'],
+            "improc_metadata"]),
+        "json"])
+    im_fpath = "/".join([
+        folders['im'], im_fname])
+    meta_fpath = "/".join([
+        folders['meta'], meta_fname])
+    return {
+        'im': im_fpath,
+        'meta': meta_fpath
+    }
+
+def document_metadata(doc_data, output_files_metadata):
+    proc = doc_data['proc']
+    improc_data = {
+        'pipelines': proc['pipelines'],
+        'pending_pipelines': proc['pending_pipelines'],
+        'pending_procs': proc['pending_procs'],
+        'current': proc['current'],
+        'finished': proc['finished'],
+    }
+    return {
+        'input_file': doc_data['file'],
+        'output_files': output_files_metadata,
+        'improc': improc_data,
+    }        
+
+def write_out(state_data):
+    out_root_folder = output_root_folder(
+        state_data[
+            'finished_doc_data'][0])
     for doc_data in state_data['finished_doc_data']:
-        out_folder_path = "/".join([
-            doc_data['file']['folder']['project_folder'],
-            "__".join([
-                doc_data['file']['folder']['subfolder_chain'],
-                "out"])])
-        if not(os.path.isdir(out_folder_path)):
-            os.makedirs(out_folder_path)
-        out_im_folder_path = "/".join([
-            out_folder_path, "images"])
-        out_meta_folder_path = "/".join([
-            out_folder_path, "metadata"])
-
-        im_fname = ".".join([
-            "__".join([
-                doc_data['file']['fname_wo_extension'],
-                "im_out"]),
-            "png"])
-        meta_fname = ".".join([
-            "__".join([
-                doc_data['file']['fname_wo_extension'],
-                "improc_metadata"]),
-            "json"])
-
-        im_path = "/".join([
-            doc_data['file']['fpath'], im_fname)
+        out_file_paths = output_doc_paths(
+            doc_data, out_root_folder)
+        metadata = document_metadata(
+            doc_data, {
+                'root_folder': out_root_folder,
+                'paths': out_file_paths})
+        cv.imwrite(
+            out_file_paths['im'], doc_data['proc']['im'])
+        with open(out_file_paths['meta'], 'w') as f:
+            f.write(
+                json.dumps(metadata))
     
 def control_shift(frame):
     state_data, gui_data = destruct_frame(
