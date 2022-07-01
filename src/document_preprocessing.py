@@ -343,7 +343,7 @@ if __name__ == '__main__':
     sd = state_data__from_folder_x_pipelines
     state_data = sd(
         input_folder_data, document_preprocessing_pipeline,
-        n_files=2)
+        n_files=4)
 
     root = tk.Tk()
     root.bind('<Control-q>', lambda event: root.destroy())

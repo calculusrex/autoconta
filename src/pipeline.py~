@@ -1,0 +1,12 @@
+
+    improc_pipeline = [
+        WarpingEditor,
+        OrthogonalRotationEditor,
+        FineRotationEditor,
+        RescaleEditor,
+        CropEditor,
+        DenoiseEditor,
+        ThresholdEditor,
+        DilateErodeEditor,
+        OCR,
+    ]

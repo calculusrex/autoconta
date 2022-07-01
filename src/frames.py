@@ -79,6 +79,11 @@ class ImProcEditor(tk.Frame):
         ]
         self.install_main_canvas()
 
+    def scale_by_main_canvas_sf(self, ns):
+        return map(
+            lambda n: n * self.main_canvas.scale_factor,
+            ns)
+        
     def skip(self, event):
         self.param_data = {}
         self.next_stage()
@@ -310,18 +315,21 @@ class WarpingEditor(ImProcEditor):
         self.mouse_label_event_config(event, 'hover')
         self.main_canvas.update_crosshairs(event)
         canv_x, canv_y = event.x, event.y
-        if len(self.selection_points) > 0 and len(self.selection_points) < 4:
+        selpnts = self.selection_points
+        if len(selpnts) > 0 and len(selpnts) < 4:
             prev_x, prev_y = self.selection_points[-1]
             prev_x *= self.main_canvas.scale_factor
             prev_y *= self.main_canvas.scale_factor
             self.main_canvas.coords(
-                self.floating_selection_line, prev_x, prev_y, canv_x, canv_y)
+                self.floating_selection_line,
+                prev_x, prev_y, canv_x, canv_y)
         if len(self.selection_points) == 3:
             init_x, init_y = self.selection_points[0]
             init_x *= self.main_canvas.scale_factor
             init_y *= self.main_canvas.scale_factor
             self.main_canvas.coords(
-                self.closing_selection_line, init_x, init_y, canv_x, canv_y)
+                self.closing_selection_line,
+                init_x, init_y, canv_x, canv_y)
 
     def click(self, event):
         self.mouse_label_event_config(event, 'click')
@@ -331,11 +339,11 @@ class WarpingEditor(ImProcEditor):
             self.selection_points.append(
                 (im_x, im_y))
 
-        if len(self.selection_points) > 1 and len(self.selection_points) < 4:
+        if len(selpnts) > 1 and len(selpnts) < 4:
             x0, y0 = self.selection_points[-2]
             self.laid_selection_lines.append(
                 self.main_canvas.create_line(
-                    *map(lambda n: n * self.main_canvas.scale_factor,
+                    *map(lambda n:n*self.main_canvas.scale_factor,
                          [x0, y0, im_x, im_y]),
                     fill=MAGENTA, width=2))
 
@@ -825,7 +833,30 @@ class ThresholdEditor(ImProcEditor):
 
 ### OPRICAL CHARACTER RECOGNITION (OCR) ----------------------------------------------
 
+def diag_crnr_coords__(box_data):
+    x0, y0 = box_data['left'], box_data['top']
+    w, h = box_data['width'], box_data['height']
+    x1, y1 = x0 + w, y0 + h
+    return x0, y0, x1, y1
+
 class OCR(ImProcEditor):
+    def __init__(self, state_data, gui_data):
+        super().__init__(state_data, gui_data)
+        self.perform_ocr()
+        self.bind('<space>', self.apply_ocr),
+
+    def perform_ocr(self):
+        self.ocr_data = dict_from_im(
+            self.proc_im) # !!! or self.og_im, idk which's better
+        for box_data in self.ocr_data:
+            self.main_canvas.create_rectangle(
+                *self.scale_by_main_canvas_sf(
+                    diag_crnr_coords__(
+                        box_data)),
+                outline=MAGENTA, width=LINE_WIDTH)
+
+
+class OCR__obsolete(ImProcEditor):
     def __init__(self, master, cvim, pipeline_data):
         super().__init__(master, cvim, pipeline_data)
         self.perform_ocr()
@@ -906,107 +937,108 @@ class OCRValidation(tk.Frame):
 
 ### PIPELINE -------------------------------------------------------------------------
 
+## Section Obsoleted
 
-# def stage_data_from_constructor_and_assoc_data(constructor, assoc_data, pipeline_index):
-#     return {
-#         'constructor': constructor,
-#         'assoc_data': assoc_data,
-#     }
+# # def stage_data_from_constructor_and_assoc_data(constructor, assoc_data, pipeline_index):
+# #     return {
+# #         'constructor': constructor,
+# #         'assoc_data': assoc_data,
+# #     }
 
-# def pipeline_data__(constructor_list, stage_associated_data,
-# ):
+# # def pipeline_data__(constructor_list, stage_associated_data,
+# # ):
 
-#     pipeline_data = list(
-#         map(stage_data_from_constructor_and_assoc_data
-#             zip(constructor_list, # frame constructor
-#                 stage_associated_data, # associated data (if any)
-#                 # next constructor
-#                 # previous constructor
+# #     pipeline_data = list(
+# #         map(stage_data_from_constructor_and_assoc_data
+# #             zip(constructor_list, # frame constructor
+# #                 stage_associated_data, # associated data (if any)
+# #                 # next constructor
+# #                 # previous constructor
 
     
     
+# #     pipeline_data['improc_params'] = {}
+# #     pipeline_data['improc_progress'] = {}
+# #     return pipeline_data
+
+# def pipeline_data__from__constructor_list(constructor_list):
+#     pipeline_data = {}
+#     pipeline_data['sequence'] = list(
+#         map(lambda x: x.__name__,
+#             constructor_list))
+#     pipeline_data['relative_constructors'] = {}
+#     for i in range(len(constructor_list)):
+#         constructor = constructor_list[i]
+
+#         if i < len(constructor_list) - 1:
+#             following_constructor = constructor_list[i+1]
+#         else:
+#             following_constructor = constructor_list[0]
+
+#         if i == 0:
+#             previous_constructor = constructor_list[-1]
+#         else:
+#             previous_constructor = constructor_list[i-1]
+
+#         pipeline_data['relative_constructors'][constructor.__name__] = {
+#             'following': following_constructor,
+#             'previous': previous_constructor,
+#         }
+
 #     pipeline_data['improc_params'] = {}
 #     pipeline_data['improc_progress'] = {}
 #     return pipeline_data
 
-def pipeline_data__from__constructor_list(constructor_list):
-    pipeline_data = {}
-    pipeline_data['sequence'] = list(
-        map(lambda x: x.__name__,
-            constructor_list))
-    pipeline_data['relative_constructors'] = {}
-    for i in range(len(constructor_list)):
-        constructor = constructor_list[i]
 
-        if i < len(constructor_list) - 1:
-            following_constructor = constructor_list[i+1]
-        else:
-            following_constructor = constructor_list[0]
+# def run_pipeline(constructor_list, im):
+#     root = tk.Tk()
+#     root.bind('<Control-q>', lambda event: root.destroy())
 
-        if i == 0:
-            previous_constructor = constructor_list[-1]
-        else:
-            previous_constructor = constructor_list[i-1]
+#     pipeline_data = pipeline_data__from__constructor_list(
+#         constructor_list)
 
-        pipeline_data['relative_constructors'][constructor.__name__] = {
-            'following': following_constructor,
-            'previous': previous_constructor,
-        }
+#     improc = constructor_list[0](
+#         root, im, pipeline_data)
+#     improc.grid(row=0, column=0, rowspan=FRAME_ROWSPAN)
 
-    pipeline_data['improc_params'] = {}
-    pipeline_data['improc_progress'] = {}
-    return pipeline_data
+#     # root.mainloop()
 
+# ### -----------------------------------------------------------------------------------
 
-def run_pipeline(constructor_list, im):
-    root = tk.Tk()
-    root.bind('<Control-q>', lambda event: root.destroy())
+# if __name__ == '__main__':
+#     print('frames.py')
 
-    pipeline_data = pipeline_data__from__constructor_list(
-        constructor_list)
+#     import os
+#     import cv2 as cv
 
-    improc = constructor_list[0](
-        root, im, pipeline_data)
-    improc.grid(row=0, column=0, rowspan=FRAME_ROWSPAN)
+#     #clean_invoice_fname = '../test_data/609d5d3c4d120e370de52b70_invoice-lp-light-border.png'
+#     samples_path = '../test_data/samples_2021'
+#     samples_fnames = list(
+#         map(lambda fnm: f'{samples_path}/{fnm}',
+#             os.listdir('../test_data/samples_2021')))
+#     im = cv.imread(samples_fnames[2])
 
-    # root.mainloop()
+#     ## ----------------------------------------------------------------------
 
-### -----------------------------------------------------------------------------------
+#     # improc_pipeline_sequence = [
+#     #     WarpingEditor,
+#     #     OrthogonalRotationEditor,
+#     #     FineRotationEditor,
+#     #     RescaleEditor,
+#     #     CropEditor,
+#     #     DenoiseEditor,
+#     #     ThresholdEditor,
+#     #     DilateErodeEditor,
+#     #     OCR,
+#     # ]
 
-if __name__ == '__main__':
-    print('frames.py')
+#     # run_pipeline(
+#     #     improc_pipeline_sequence, im)
 
-    import os
-    import cv2 as cv
+#     ## ----------------------------------------------------------------------
 
-    #clean_invoice_fname = '../test_data/609d5d3c4d120e370de52b70_invoice-lp-light-border.png'
-    samples_path = '../test_data/samples_2021'
-    samples_fnames = list(
-        map(lambda fnm: f'{samples_path}/{fnm}',
-            os.listdir('../test_data/samples_2021')))
-    im = cv.imread(samples_fnames[2])
+#     im = cv.imread('improc_images/DilateErodeEditor.png')
 
-    ## ----------------------------------------------------------------------
-
-    # improc_pipeline_sequence = [
-    #     WarpingEditor,
-    #     OrthogonalRotationEditor,
-    #     FineRotationEditor,
-    #     RescaleEditor,
-    #     CropEditor,
-    #     DenoiseEditor,
-    #     ThresholdEditor,
-    #     DilateErodeEditor,
-    #     OCR,
-    # ]
-
-    # run_pipeline(
-    #     improc_pipeline_sequence, im)
-
-    ## ----------------------------------------------------------------------
-
-    im = cv.imread('improc_images/DilateErodeEditor.png')
-
-    pipeline_sequence = [OCR]
-    run_pipeline(pipeline_sequence, im)
+#     pipeline_sequence = [OCR]
+#     run_pipeline(pipeline_sequence, im)
     
