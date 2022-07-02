@@ -21,6 +21,18 @@ from frames import WarpingEditor, OrthogonalRotationEditor, FineRotationEditor, 
 from constants import *
 from im import display_cv
 
+
+stage_keys_x_constructors = {
+    'warping': WarpingEditor,
+    'orthogonal_rotation': OrthogonalRotationEditor,
+    'fine_rotation': FineRotationEditor,
+    'rescale': RescaleEditor,
+    'crop': CropEditor,
+    'denoise': DenoiseEditor,
+    'dilate_erode': DilateErodeEditor,
+    'threshold': ThresholdEditor,
+}
+
 # ----------------------------------------------------------------
 # PIPELINE
 
@@ -50,17 +62,6 @@ def read_im(filepath):
     else:
         im = cv.imread(filepath)
     return im
-
-stage_keys_x_constructors = {
-    'warping': WarpingEditor,
-    'orthogonal_rotation': OrthogonalRotationEditor,
-    'fine_rotation': FineRotationEditor,
-    'rescale': RescaleEditor,
-    'crop': CropEditor,
-    'denoise': DenoiseEditor,
-    'dilate_erode': DilateErodeEditor,
-    'threshold': ThresholdEditor,
-}
 
 def constructor_from_stage_key(key):
     return stage_keys_x_constructors[key]
@@ -134,13 +135,13 @@ def state_data__from_folder_x_pipelines(
     pending_doc_data.reverse()
     return {
         'pending_doc_data': pending_doc_data,
-        'cw_doc_data': {},
+        'cw_doc': {},
         'finished_doc_data': [],
         'control_shift': control_shift
     }
 
 def is_curr_doc_ppln_done(state_data):
-    doc_dat = state_data['cw_doc_data']
+    doc_dat = state_data['cw_doc']
     return not(bool(
         doc_dat['proc']['pending_procs']))
 
@@ -167,7 +168,7 @@ def batch__are_all_pplns_done(state_data):
 
 def destruct_frame(frame):
     state_data = frame.state_data
-    doc_dat = state_data['cw_doc_data']
+    doc_dat = state_data['cw_doc']
     current_proc_dat = {
         'key': frame.proc_key,
         'params': frame.param_data}
@@ -187,7 +188,7 @@ def load_next_pipeline(document_data):
     document_data['proc']['pending_procs'] = ppln
 
 def deploy_next_ppln_frame(state_data, gui_data):
-    doc_dat = state_data['cw_doc_data']
+    doc_dat = state_data['cw_doc']
     if are_no_pending_procs(doc_dat):
         load_next_pipeline(doc_dat)
     key = doc_dat['proc']['pending_procs'].pop()
@@ -199,14 +200,14 @@ def deploy_next_ppln_frame(state_data, gui_data):
         row=0, column=0, rowspan=FRAME_ROWSPAN)
 
 def stash_current_doc_data(state_data, gui_data):
-    doc_dat = state_data['cw_doc_data']
+    doc_dat = state_data['cw_doc']
     state_data['finished_doc_data'].append(
         doc_dat)
-    state_data['cw_doc_data'] = 'interdoc'
+    state_data['cw_doc'] = 'interdoc'
     
 def process_next_doc(state_data, gui_data):
     doc_dat = state_data['pending_doc_data'].pop()
-    state_data['cw_doc_data'] = doc_dat
+    state_data['cw_doc'] = doc_dat
     deploy_next_ppln_frame(
         state_data, gui_data)
     

@@ -55,8 +55,11 @@ class ImProcEditor(tk.Frame):
         super().__init__(gui_data['master'])
         self.state_data = state_data
 
-        self.doc_data = self.state_data['cw_doc_data']
-        self.og_im = self.doc_data['proc']['im']
+        self.doc_data = self.state_data['cw_doc']
+        if 'proc' in self.doc_data.keys():
+            self.og_im = self.doc_data['proc']['im']
+        else:
+            self.og_im = self.doc_data['im']
         self.proc_im = self.og_im.copy()
 
         self.labels = {}
@@ -843,11 +846,14 @@ class OCR(ImProcEditor):
     def __init__(self, state_data, gui_data):
         super().__init__(state_data, gui_data)
         self.perform_ocr()
-        self.bind('<space>', self.apply_ocr),
-
+        self.plot_ocr_bounding_boxes()
+        # self.bind('<space>', self.apply_ocr),
+        
     def perform_ocr(self):
         self.ocr_data = dict_from_im(
             self.proc_im) # !!! or self.og_im, idk which's better
+
+    def plot_ocr_bounding_boxes(self):
         for box_data in self.ocr_data:
             self.main_canvas.create_rectangle(
                 *self.scale_by_main_canvas_sf(
@@ -855,6 +861,9 @@ class OCR(ImProcEditor):
                         box_data)),
                 outline=MAGENTA, width=LINE_WIDTH)
 
+        
+        
+            
 
 class OCR__obsolete(ImProcEditor):
     def __init__(self, master, cvim, pipeline_data):
