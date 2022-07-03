@@ -8,7 +8,7 @@ from copy import deepcopy
 import functools as ft
 import json
 
-from frames import OCR, OCRROI, leaf_paths
+from frames import OCR, OCRROI
 from constants import *
 from im import display_cv
 

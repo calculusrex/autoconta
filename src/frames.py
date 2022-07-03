@@ -895,6 +895,9 @@ class OCRROI(ImProcEditor):
             ('<Button-1>', self.click),
         ])
         self.main_canvas.focus_set()
+        self.add_label('cw_roi')
+        self.labels['cw_roi'].config(
+            text=f'selectează regiune:\n{self.current_roi_key()}')
 
     def draw_selection_rectangle(self, p1_coords):
         self.main_canvas.coords(
@@ -935,6 +938,8 @@ class OCRROI(ImProcEditor):
         self.pending_roi_keys.pop()
         # print(self.roi_data[
         #     self.current_roi_key()])
+        self.labels['cw_roi'].config(
+            text=f'selectează regiune:\n{self.current_roi_key()}')
         print(self.roi_data)
 
 
