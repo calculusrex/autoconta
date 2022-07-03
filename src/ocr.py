@@ -8,7 +8,7 @@ from copy import deepcopy
 import functools as ft
 import json
 
-from frames import OCR
+from frames import OCR, OCRROI, leaf_paths
 from constants import *
 from im import display_cv
 
@@ -16,13 +16,38 @@ from document_preprocessing import folder_data__
 
 
 stage_keys_x_constructors = {
-    'ocr': OCR,
+    # 'ocr': OCR,
+    'ocr': OCRROI,
 }
 
 def constructor_from_key(key):
     return stage_keys_x_constructors[key]
 
 ocr_pipeline = ['ocr']
+
+ocr_proc_params = {
+    'roi_keys': {
+        'header': [
+            'furnizor', 'nr_doc', 'dată_emitere'],
+        'body': [
+            'denumire_produs/serviciu', 'cantitate',
+            'val_fără_tva', 'preţ_vânzare'],
+        'footer': ['total'],
+        'auxilliary': ['chitanţă']}
+}
+
+ocr_proc_param_path = {
+    'furnizor': ['roi_keys', 'header'],
+    'nr_doc': ['roi_keys', 'header'],
+    'dată_emitere': ['roi_keys', 'header'],
+    'denumire_produs/serviciu': ['roi_keys', 'body'],
+    'cantitate': ['roi_keys', 'body'],
+    'val_fără_tva': ['roi_keys', 'body'],
+    'preţ_vânzare': ['roi_keys', 'body'],
+    'total': ['roi_keys', 'footer'],
+    'chitanţă': ['roi_keys', 'auxilliary'],
+}
+
 
 def folder_data__(project_folder, subfolder_path):
     input_folder = "/".join([
@@ -122,6 +147,7 @@ def init_state_data__from_doc_data(doc_data):
         'pending_docs': docs,
         'finished_docs': [],
         'pipeline': ocr_pipeline,
+        'proc_params': ocr_proc_params,
         'cw_doc': 'interdoc',
         'control_shift': control_shift,
     }

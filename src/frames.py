@@ -5,6 +5,8 @@ import tkinter as tk
 # import numpy as np
 import cv2 as cv
 from pprint import pprint
+import functools as ft
+import collections
 
 from canvas import canvas_from_im, DocumentCanvas, ValidationCanvas
 from im import imwarp, rgb2hex, display_cv, rotate, orthogonal_rotate, rotate_without_clipping, display_cv, denoise, dilate_erode, threshold, crop, im_rescale, dict_from_im #, rotate_by_90deg
@@ -42,12 +44,19 @@ def flatten_once(xss):
     for xs in xss:
         for x in xs:
             ys.append(x)
-    return ys
+    return ys        
 
 def augment_data(dat1, dat2):
     for key in dat2.keys():
         dat1[key] = dat2[key]
 
+def quad_val_coords__(p0_coords, p1_coords):
+    return (
+        p0_coords['canv']['x'],
+        p0_coords['canv']['y'],
+        p1_coords['canv']['x'],
+        p1_coords['canv']['y'])
+        
 ### GENERAL EDITOR --------------------------------------------------------------------
 
 class ImProcEditor(tk.Frame):
@@ -82,7 +91,24 @@ class ImProcEditor(tk.Frame):
         ]
         self.install_main_canvas()
 
-    def scale_by_main_canvas_sf(self, ns):
+    def mouse_coords__(self, event):
+        canv_x, canv_y = event.x, event.y
+        im_x, im_y = list(
+            self.inv_scale_by_main_canv_sf(
+                [canv_x, canv_y]))
+        return {
+            'canv': {'x': canv_x,
+                     'y': canv_y},
+            'im': {'x': im_x,
+                   'y': im_y}}
+
+    def inv_scale_by_main_canv_sf(self, ns):
+        sf = self.main_canvas.scale_factor
+        return map(
+            lambda n: int(round(n / sf)),
+            ns)
+
+    def scale_by_main_canv_sf(self, ns):
         return map(
             lambda n: n * self.main_canvas.scale_factor,
             ns)
@@ -842,6 +868,79 @@ def diag_crnr_coords__(box_data):
     x1, y1 = x0 + w, y0 + h
     return x0, y0, x1, y1
 
+def flatten_sg_lvl_list_tree(xss):
+    return ft.reduce(
+        lambda a, b: a + b,
+        map(lambda key: xss[key],
+            xss.keys()),
+        [])
+
+class OCRROI(ImProcEditor):
+    def __init__(self, state_data, gui_data):
+        super().__init__(state_data, gui_data)
+        self.roi_key_data = self.state_data[
+            'proc_params']['roi_keys']
+        self.roi_keys = flatten_sg_lvl_list_tree(
+            self.roi_key_data)
+        self.pending_roi_keys = self.roi_keys.copy()
+        self.pending_roi_keys.reverse()
+        self.roi_data = {}
+        self.sel_pnts = []
+        self.p0_coords = None
+        create_rectangle = self.main_canvas.create_rectangle
+        self.selection_rectangle = create_rectangle(
+            0, 0, 0, 0, outline=MAGENTA, width=LINE_WIDTH)
+        self.augment_main_canvas_bindings([
+            ('<Motion>', self.hover),
+            ('<Button-1>', self.click),
+        ])
+        self.main_canvas.focus_set()
+
+    def draw_selection_rectangle(self, p1_coords):
+        self.main_canvas.coords(
+            self.selection_rectangle,
+            *quad_val_coords__(
+                self.p0_coords, p1_coords))
+        
+    def hover(self, event):
+        self.mouse_label_event_config(event, 'hover')
+        hover_coords = self.mouse_coords__(event)
+        if bool(self.p0_coords):
+            self.draw_selection_rectangle(
+                hover_coords)
+
+    def click(self, event):
+        self.mouse_label_event_config(event, 'click')
+        click_coords = self.mouse_coords__(event)
+        if bool(self.pending_roi_keys): # not empty
+            if not(bool(self.p0_coords)):
+                print(self.p0_coords)
+                self.select_first_point(click_coords)
+            else:
+                self.select_scnd_and_stash_roi(
+                    click_coords)
+
+    def select_first_point(self, click_coords):
+        self.p0_coords = click_coords
+                
+    def current_roi_key(self):
+        return self.pending_roi_keys[-1]
+
+    def select_scnd_and_stash_roi(self, click_coords):
+        self.roi_data[
+            self.current_roi_key()] = {
+                'p0': self.p0_coords,
+                'p1': click_coords}
+        self.p0_coords = None
+        self.pending_roi_keys.pop()
+        # print(self.roi_data[
+        #     self.current_roi_key()])
+        print(self.roi_data)
+
+
+    def is_second_roi_selection(self):
+        return len(self.sel_pnts) == 1
+
 class OCR(ImProcEditor):
     def __init__(self, state_data, gui_data):
         super().__init__(state_data, gui_data)
@@ -856,7 +955,7 @@ class OCR(ImProcEditor):
     def plot_ocr_bounding_boxes(self):
         for box_data in self.ocr_data:
             self.main_canvas.create_rectangle(
-                *self.scale_by_main_canvas_sf(
+                *self.scale_by_main_canv_sf(
                     diag_crnr_coords__(
                         box_data)),
                 outline=MAGENTA, width=LINE_WIDTH)
