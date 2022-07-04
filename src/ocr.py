@@ -8,7 +8,7 @@ from copy import deepcopy
 import functools as ft
 import json
 
-from frames import OCR, OCRROI
+from functional_frames import OCR, OCRROI, DocumentDescriber
 from constants import *
 from im import display_cv
 
@@ -18,6 +18,7 @@ from document_preprocessing import folder_data__
 stage_keys_x_constructors = {
     # 'ocr': OCR,
     'ocr': OCRROI,
+    'document_describer': DocumentDescriber,
 }
 
 def constructor_from_key(key):
@@ -33,7 +34,8 @@ ocr_proc_params = {
             'denumire_produs/serviciu', 'cantitate',
             'val_fără_tva', 'preţ_vânzare'],
         'footer': ['total'],
-        'auxilliary': ['chitanţă']}
+#        'auxilliary': ['chitanţă']
+    }
 }
 
 ocr_proc_param_path = {
@@ -138,7 +140,8 @@ def doc_data__(input_folder_data):
         data[key] = doc_dat
     return data
 
-def init_state_data__from_doc_data(doc_data):
+def init_state_data__from_doc_data(
+        doc_data, pipeline, param_data):
     docs = []
     for key in doc_data.keys():
         docs.append(doc_data[key])
@@ -146,8 +149,8 @@ def init_state_data__from_doc_data(doc_data):
     return {
         'pending_docs': docs,
         'finished_docs': [],
-        'pipeline': ocr_pipeline,
-        'proc_params': ocr_proc_params,
+        'pipeline': pipeline,
+        'proc_params': param_data,
         'cw_doc': 'interdoc',
         'control_shift': control_shift,
     }
@@ -190,14 +193,15 @@ def construct_frame(state_data, gui_data):
     return frame_constructor(
         state_data, gui_data)
 
-def deploy_frame(frame):
+def deploy_frame(frame, gui_data):
     frame.grid(
         row=0, column=0, rowspan=FRAME_ROWSPAN)
+    root.mainloop()
 
 def deploy_next_pending_proc(state_data, gui_data):
     load_next_proc(state_data)
     frame = construct_frame(state_data, gui_data)
-    deploy_frame(frame)
+    deploy_frame(frame, gui_data)
 
 def deploy_pipeline(state_data, gui_data):
     deploy_next_pending_proc(
@@ -250,14 +254,18 @@ if __name__ == '__main__':
     root = tk.Tk()
     root.bind('<Control-q>', lambda event: root.destroy())
 
+    pipeline = ['ocr'] # ['document_describer']
+    proc_params = {}
+    
     state_data = init_state_data__from_doc_data(
-        doc_data)
+        doc_data, pipeline, ocr_proc_params)
 
     gui_data = {'master': root}
 
     deploy_next_pending_doc(
         state_data, gui_data)
 
+    print('we have controll back')
 
 
     # if not(os.path.isdir('test_out_images')):
