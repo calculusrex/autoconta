@@ -860,7 +860,7 @@ class ThresholdEditor(ImProcEditor):
         }
         self.next_stage()
 
-### OPRICAL CHARACTER RECOGNITION (OCR) ----------------------------------------------
+### OPRICAL CHARACTER RECOGNITION (OCR) ----------------------
 
 def diag_crnr_coords__(box_data):
     x0, y0 = box_data['left'], box_data['top']
@@ -874,6 +874,7 @@ def flatten_sg_lvl_list_tree(xss):
         map(lambda key: xss[key],
             xss.keys()),
         [])
+
 
 class OCRROI(ImProcEditor):
     def __init__(self, state_data, gui_data):
