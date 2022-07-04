@@ -939,7 +939,7 @@ class OCRROI(ImProcEditor):
 
     def pass_controll_back_to_the_script(self):
         self.destroy()
-        # self.master.destroy()
+        self.master.destroy()
 
     def select_first_point(self, click_coords):
         self.p0_coords = click_coords
