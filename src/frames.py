@@ -875,6 +875,7 @@ def flatten_sg_lvl_list_tree(xss):
             xss.keys()),
         [])
 
+
 class OCRROI(ImProcEditor):
     def __init__(self, state_data, gui_data):
         super().__init__(state_data, gui_data)
