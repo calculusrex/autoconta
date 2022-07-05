@@ -60,15 +60,11 @@ def quad_val_coords__(p0_coords, p1_coords):
 ### GENERAL EDITOR --------------------------------------------------------------------
 
 class ImProcEditor(tk.Frame):
-    def __init__(self, state_data, gui_data):
-        super().__init__(gui_data['master'])
+    def __init__(self, root, state_data, im):
+        super().__init__(root)
         self.state_data = state_data
 
-        self.doc_data = self.state_data['cw_doc']
-        if 'proc' in self.doc_data.keys():
-            self.og_im = self.doc_data['proc']['im']
-        else:
-            self.og_im = self.doc_data['im']
+        self.og_im = im
         self.proc_im = self.og_im.copy()
 
         self.labels = {}
@@ -102,6 +98,16 @@ class ImProcEditor(tk.Frame):
             'im': {'x': im_x,
                    'y': im_y}}
 
+    def pass_controll_back_to_the_script(self):
+        op_param_data = {
+            'key': self.proc_key,
+            'params': self.param_data,
+        }
+        self.state_data['op_params'] = op_param_data
+        self.state_data['out_im'] = self.proc_im
+        self.destroy()
+        self.master.destroy()
+
     def inv_scale_by_main_canv_sf(self, ns):
         sf = self.main_canvas.scale_factor
         return map(
@@ -115,7 +121,7 @@ class ImProcEditor(tk.Frame):
         
     def skip(self, event):
         self.param_data = {}
-        self.next_stage()
+        self.pass_controll_back_to_the_script()
 
     def add_label(self, key):
         self.labels[key] = tk.Label(self, text=key)
@@ -159,169 +165,11 @@ class ImProcEditor(tk.Frame):
         frame.grid(
             row=0, column=0, rowspan=FRAME_ROWSPAN)
 
-    def next_stage(self):
-        self.state_data['control_shift'](self)
-        # if self.data_directed:
-        #     parent = self.master
-        #     pipeline_data = self.pipeline_data
-        #     pipeline_data['destruction_procedure'](
-        #         self, pipeline_data)
-        #     pipeline_data['construction_procedure'](
-        #         parent, pipeline_data)
-        # else:
-        #     self.pipeline_data['improc_params'][self.__class__.__name__] = self.param_data
-        #     progress_data = {
-        #         'og_im': self.og_im.copy(), 'proc_im': self.proc_im.copy()
-        #     }
-        #     # SAVE --------------------------------------------------------------------
-        #     cv.imwrite(f'improc_images/{self.__class__.__name__}.png', self.proc_im)
-        #     # -------------------------------------------------------------------------
-        #     self.pipeline_data['improc_progress'][self.__class__.__name__] = progress_data
-        #     # pprint(self.pipeline_data)
-        #     # print()
-        #     parent = self.master
-        #     next_frame_constructor = self.pipeline_data['relative_constructors'][
-        #         self.__class__.__name__]['following']
-        #     frame = next_frame_constructor(
-        #         parent, self.proc_im.copy(), self.pipeline_data)
-        #     self.destroy()
-        #     frame.grid(
-        #         row=0, column=0, rowspan=FRAME_ROWSPAN)
-
-    def previous_stage(self):
-        parent = self.master
-        previous_frame_constructor = self.pipeline_data['relative_constructors'][
-            self.__class__.__name__]['previous']
-        frame = previous_frame_constructor(
-            parent,
-            self.pipeline_data[
-                'improc_progress'][previous_frame_constructor.__name__]['og_im'],
-            self.pipeline_data)
-        self.destroy()
-        frame.grid(
-            row=0, column=0, rowspan=FRAME_ROWSPAN)
-        
-
-# class ImProcEditor(tk.Frame):
-#     def __init__(self, master, image_data, pipeline_data, data_directed=False):
-#         super().__init__(master)
-#         self.data_directed = data_directed
-#         self.pipeline_data = pipeline_data
-#         self.grid(row=0, column=0, rowspan=FRAME_ROWSPAN)
-#         self.og_im = image_data['im']
-#         self.og_im_fname = image_data['fname']
-        
-#         self.proc_im = image_data['im'].copy()
-        
-#         self.labels = {}
-#         self.add_label(self.__class__.__name__)
-#         self.add_label('hover')
-#         self.add_label('click')
-
-#         self.bind('<space>', self.skip)
-
-#         self.main_canvas = None
-#         self.main_canvas_bindings = [
-#             ('<Motion>', lambda e: self.mouse_label_event_config(e, 'hover')),
-#             ('<Button-1>', lambda e: self.mouse_label_event_config(e, 'click')),
-#             ('<Escape>', self.cancel), ('<Control-c>', self.cancel),
-#             ('<Control-z>', lambda e: self.previous_stage()),
-#         ]
-#         self.install_main_canvas()
-
-#     def skip(self, event):
-#         self.param_data = {}
-#         self.next_stage()
-
-#     def add_label(self, key):
-#         self.labels[key] = tk.Label(self, text=key)
-#         self.labels[key].grid(
-#             row=len(self.labels) - 1, column=2)
-
-#     def mouse_label_event_config(self, event, label_key):
-#         self.labels[label_key].config(
-#             text=f'{label_key}\nx: {event.x}\ny: {event.y}')
-
-#     def load_bindings(self, widget, bindings):
-#         for keypress, function in bindings:
-#             widget.bind(keypress, function)
-
-#     def augment_main_canvas_bindings(self, additional_bindings):
-#         self.load_bindings(
-#             self.main_canvas, additional_bindings)
-#         self.main_canvas_bindings.extend(
-#             additional_bindings)
-
-#     def install_main_canvas(self):
-#         self.main_canvas = DocumentCanvas(
-#             self, self.proc_im)
-#         self.main_canvas.grid(row=0, column=0, rowspan=FRAME_ROWSPAN)
-#         self.load_bindings(
-#             self.main_canvas, self.main_canvas_bindings)
-#         self.main_canvas.focus_set()
-
-#     def update_main_canvas(self, grid_offset=None):
-#         self.main_canvas.destroy()
-#         self.install_main_canvas()
-#         if grid_offset:
-#             self.main_canvas.install_grid(
-#                 offset=grid_offset)
-
-#     def cancel(self, event):
-#         parent = self.master
-#         frame_constructor = self.__class__
-#         frame = frame_constructor(parent, self.og_im.copy(), self.pipeline_data)
-#         self.destroy()
-#         frame.grid(
-#             row=0, column=0, rowspan=FRAME_ROWSPAN)
-
-#     def next_stage(self):
-#         if self.data_directed:
-#             parent = self.master
-#             pipeline_data = self.pipeline_data
-#             pipeline_data['destruction_procedure'](
-#                 self, pipeline_data)
-#             pipeline_data['construction_procedure'](
-#                 parent, pipeline_data)
-#         else:
-#             self.pipeline_data['improc_params'][self.__class__.__name__] = self.param_data
-#             progress_data = {
-#                 'og_im': self.og_im.copy(), 'proc_im': self.proc_im.copy()
-#             }
-#             # SAVE --------------------------------------------------------------------
-#             cv.imwrite(f'improc_images/{self.__class__.__name__}.png', self.proc_im)
-#             # -------------------------------------------------------------------------
-#             self.pipeline_data['improc_progress'][self.__class__.__name__] = progress_data
-#             # pprint(self.pipeline_data)
-#             # print()
-#             parent = self.master
-#             next_frame_constructor = self.pipeline_data['relative_constructors'][
-#                 self.__class__.__name__]['following']
-#             frame = next_frame_constructor(
-#                 parent, self.proc_im.copy(), self.pipeline_data)
-#             self.destroy()
-#             frame.grid(
-#                 row=0, column=0, rowspan=FRAME_ROWSPAN)
-
-#     def previous_stage(self):
-#         parent = self.master
-#         previous_frame_constructor = self.pipeline_data['relative_constructors'][
-#             self.__class__.__name__]['previous']
-#         frame = previous_frame_constructor(
-#             parent,
-#             self.pipeline_data[
-#                 'improc_progress'][previous_frame_constructor.__name__]['og_im'],
-#             self.pipeline_data)
-#         self.destroy()
-#         frame.grid(
-#             row=0, column=0, rowspan=FRAME_ROWSPAN)
-        
-
-### WARPING ----------------------------------------------------------------------------      
+### WARPING ------------------------------------------------------
 
 class WarpingEditor(ImProcEditor):
-    def __init__(self, state_data, gui_data):
-        super().__init__(state_data, gui_data)
+    def __init__(self, root, state_data, im):
+        super().__init__(root, state_data, im)
 
         self.proc_key = 'warping'
 
@@ -506,15 +354,17 @@ class WarpingEditor(ImProcEditor):
     def apply_warp(self, event): # !!! TO BE COMPLETED
         self.proc_im = imwarp(
             self.og_im, self.selection_points)
-        self.param_data = {'selection_points': self.selection_points.copy()}
-        self.next_stage()
+        self.param_data = {
+            'selection_points': self.selection_points.copy()
+        }
+        self.pass_controll_back_to_the_script()
 
         
-### ORTHOGONAL ROTATION --------------------------------------------------------------
+### ORTHOGONAL ROTATION ------------------------------------------
 
 class OrthogonalRotationEditor(ImProcEditor):
-    def __init__(self, state_data, gui_data):
-        super().__init__(state_data, gui_data)
+    def __init__(self, root, state_data, im):
+        super().__init__(root, state_data, im)
 
         self.proc_key = 'orthogonal_rotation'
 
@@ -537,13 +387,13 @@ class OrthogonalRotationEditor(ImProcEditor):
     def apply_orthogonal_rotation(self, event):
         self.param_data = {
             'orthogonal_rotation_ticks': self.orthogonal_rotation_ticks}
-        self.next_stage()
+        self.pass_controll_back_to_the_script()
 
-### FINE ROTATION --------------------------------------------------------------
+### FINE ROTATION ------------------------------------------------
 
 class FineRotationEditor(ImProcEditor):
-    def __init__(self, state_data, gui_data):
-        super().__init__(state_data, gui_data)
+    def __init__(self, root, state_data, im):
+        super().__init__(root, state_data, im)
 
         self.proc_key = 'fine_rotation'
 
@@ -570,13 +420,13 @@ class FineRotationEditor(ImProcEditor):
         self.proc_im = rotate_without_clipping(
             self.og_im, self.fine_rotation_angle)
         self.param_data = {'rotation_angle': self.fine_rotation_angle}
-        self.next_stage()
+        self.pass_controll_back_to_the_script()
 
 ### RESCALE -----------------------------------------------------------------------
 
 class RescaleEditor(ImProcEditor):
-    def __init__(self, state_data, gui_data):
-        super().__init__(state_data, gui_data)
+    def __init__(self, root, state_data, im):
+        super().__init__(root, state_data, im)
 
         self.proc_key = 'rescale'        
 
@@ -653,7 +503,7 @@ class RescaleEditor(ImProcEditor):
                 self.og_im, self.letter_resize_scale_factor)
             self.param_data = {
                 'letter_resize_scale_factor': self.letter_resize_scale_factor}
-            self.next_stage()
+            self.pass_controll_back_to_the_script()
                 
     def hover_letter_height(self, event):
         self.mouse_label_event_config(event, 'hover')
@@ -675,11 +525,11 @@ class RescaleEditor(ImProcEditor):
             self.labels['og_letter_height'].config(
                 text=f'og_letter_height\n{og_letter_height}')            
 
-### CROP -----------------------------------------------------------------------------
+### CROP ---------------------------------------------------------
 
 class CropEditor(ImProcEditor):
-    def __init__(self, state_data, gui_data):
-        super().__init__(state_data, gui_data)
+    def __init__(self, root, state_data, im):
+        super().__init__(root, state_data, im)
 
         self.proc_key = 'crop'        
 
@@ -705,7 +555,7 @@ class CropEditor(ImProcEditor):
                 self.og_im, *self.selection_points)
             self.param_data = {
                 'crop_selection_points': self.selection_points}
-            self.next_stage()
+            self.pass_controll_back_to_the_script()
 
     def hover_selection_point(self, event):
         self.mouse_label_event_config(event, 'hover')
@@ -720,12 +570,12 @@ class CropEditor(ImProcEditor):
                 self.selection_rectangle,
                 prev_x, prev_y, curr_x, curr_y)
 
-### FILTERING EDITOR ---------------------------------------------------------------
+### FILTERING EDITOR ---------------------------------------------
 
 class FilteringEditor(ImProcEditor):
-    def __init__(self, state_data, gui_data, filter_function,
+    def __init__(self, root, state_data, im, filter_function,
                  allow_negative_kernel_size=False):
-        super().__init__(state_data, gui_data)
+        super().__init__(root, state_data, im)
         self.fltr = filter_function
         if allow_negative_kernel_size:
             self.min_kernel_size_assertion = lambda inst: True
@@ -780,30 +630,30 @@ class FilteringEditor(ImProcEditor):
             'kernel_size': self.kernel_size,
             'iteration_n': self.iteration_n
         }
-        self.next_stage()
+        self.pass_controll_back_to_the_script()
 
-### DENOISE -------------------------------------------------------------------------
+### DENOISE ------------------------------------------------------
 
 class DenoiseEditor(FilteringEditor):
-    def __init__(self, state_data, gui_data):
+    def __init__(self, root, state_data, im):
         super().__init__(
-            state_data, gui_data, denoise)
+            root, state_data, im, denoise)
         self.proc_key = 'denoise'
 
-### DILATE ERODE ----------------------------------------------------------------
+### DILATE ERODE -------------------------------------------------
 
 class DilateErodeEditor(FilteringEditor):
-    def __init__(self, state_data, gui_data):
+    def __init__(self, root, state_data, im):
         super().__init__(
-            state_data, gui_data,
+            root, state_data, im,
             dilate_erode, allow_negative_kernel_size=True)
         self.proc_key = 'dilate_erode'
 
-### THRESHOLD -------------------------------------------------------------------
+### THRESHOLD ----------------------------------------------------
 
 class ThresholdEditor(ImProcEditor):
-    def __init__(self, state_data, gui_data):
-        super().__init__(state_data, gui_data)
+    def __init__(self, root, state_data, im):
+        super().__init__(root, state_data, im)
 
         self.proc_key = 'threshold'
 
@@ -858,7 +708,7 @@ class ThresholdEditor(ImProcEditor):
             'block_size': self.block_size,
             'constant': self.constant
         }
-        self.next_stage()
+        self.pass_controll_back_to_the_script()
 
 ### OPRICAL CHARACTER RECOGNITION (OCR) ----------------------
 
@@ -875,19 +725,15 @@ def flatten_sg_lvl_list_tree(xss):
             xss.keys()),
         [])
 
-
 class DocumentDescriber(ImProcEditor):
-    def __init__(self, state_data, gui_data):
-        super().__init__(state_data, gui_data)
-    
+    def __init__(self, root, state_data, im):
+        super().__init__(root, state_data, im)    
 
 class OCRROI(ImProcEditor):
-    def __init__(self, state_data, gui_data):
-        super().__init__(state_data, gui_data)
+    def __init__(self, root, state_data, im):
+        super().__init__(root, state_data, im)
         self.roi_key_data = self.state_data[
             'proc_params']['roi_keys']
-        # self.roi_keys = flatten_sg_lvl_list_tree(
-        #     self.roi_key_data)
         self.roi_keys = list(
             self.roi_key_data.keys())
         self.pending_roi_keys = self.roi_keys.copy()
@@ -931,15 +777,11 @@ class OCRROI(ImProcEditor):
             elif len(self.pending_roi_keys) == 1:
                 self.select_scnd_and_stash_roi(
                     click_coords)
-                self.pass_controll_back_to_the_script()                
+                self.pass_controll_back_to_the_script()
             else:
                 self.select_scnd_and_stash_roi(
                     click_coords)
 
-
-    def pass_controll_back_to_the_script(self):
-        self.destroy()
-        self.master.destroy()
 
     def select_first_point(self, click_coords):
         self.p0_coords = click_coords
