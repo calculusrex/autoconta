@@ -40,7 +40,8 @@ class ValidationCanvas(tk.Canvas):
 
 
 class DocumentCanvas(tk.Canvas):
-    def __init__(self, master, cvim, bg=GRAY, screen_width_percentage=1/3):
+    def __init__(self, master, cvim, bg=GRAY,
+                 screen_width_percentage=1/3):
         self.im = cvim
         self.im_h, self.im_w = self.im.shape[:2]
         screen_w = master.winfo_screenwidth()

@@ -1,3 +1,4 @@
+import tkinter as tk
 
 import os
 import cv2 as cv
@@ -6,31 +7,71 @@ from PIL import Image
 from copy import deepcopy
 import functools as ft
 import json
-from collections import OrderedDict
 
-from functional_frames import WarpingEditor, OrthogonalRotationEditor, FineRotationEditor, RescaleEditor, CropEditor, DenoiseEditor, DilateErodeEditor, ThresholdEditor
+from functional_frames import WarpingEditor, OrthogonalRotationEditor, FineRotationEditor, RescaleEditor, CropEditor, DenoiseEditor, DilateErodeEditor, ThresholdEditor, OCRROI, OCR
 
+from constants import *
 
-transform_stages = OrderedDict([
-    ('warping', WarpingEditor),
-    ('orthogonal_rotation', OrthogonalRotationEditor),
-    ('fine_rotation', FineRotationEditor),
-    ('rescale', RescaleEditor),
-    ('crop', CropEditor),
-])
+stage_keys_x_constructors = {
+    'warping': WarpingEditor,
+    'orthogonal_rotation': OrthogonalRotationEditor,
+    'fine_rotation': FineRotationEditor,
+    'rescale': RescaleEditor,
+    'crop': CropEditor,
+    'denoise': DenoiseEditor,
+    'dilate_erode': DilateErodeEditor,
+    'threshold': ThresholdEditor,
+}
 
-filter_stages = OrderedDict([
-    ('denoise', DenoiseEditor),
-    ('dilate_erode', DilateErodeEditor),
-    ('threshold', ThresholdEditor),
-])
+transform_stage_sequence = [
+#    'warping',
+#    'orthogonal_rotation',
+    'fine_rotation',
+    'rescale',
+    'crop',
+]
+
+transform_stage_data = {
+    # 'warping': {'cnstrctr_params': {}},
+    # 'orthogonal_rotation': {'cnstrctr_params': {}},
+    'fine_rotation': {'cnstrctr_params': {}},
+    'rescale': {'cnstrctr_params': {}},
+    'crop': {'cnstrctr_params': {}},
+}
+
+transform_pipeline_data = {
+    'sequence': transform_stage_sequence,
+    'data': transform_stage_data,
+}
+    
+filter_stage_sequence = [
+    'denoise',
+    'threshold',
+    'dilate_erode',
+]
+
+filter_stage_data = {
+    'denoise': {'cnstrctr_params': {}},
+    'threshold': {'cnstrctr_params': {}},
+    'dilate_erode': {'cnstrctr_params': {}},
+}
+
+filter_pipeline_data = {
+    'sequence': filter_stage_sequence,
+    'data': filter_stage_data,
+}
+
+def init_gui():    
+    root = tk.Tk()
+    root.bind('<Control-q>', lambda event: root.destroy())
+    return root
 
 def deploy_(frame):
     frame.grid(
         row=0, column=0, rowspan=FRAME_ROWSPAN)
 
-def invoque_gui(im, cnstrctr, input_param_data):
-    root = tk.Tk()
+def deploy_gui(im, cnstrctr, input_param_data):
+    root = init_gui()
     state_data = {
         'input_params': input_param_data,
     }
@@ -42,25 +83,44 @@ def invoque_gui(im, cnstrctr, input_param_data):
     op_params = state_data['op_params']
     return im, op_params
 
-def invoque_human_guided_im_op_pipeline(
+def deploy_human_guided_im_op_pipeline(
         im, pipeline_data):
-    for key in pipeline_data['op_sequence'].keys():
-        cnstrctr = pipeline_data[key]['constructor']
-        cnstrctr_params = pipeline_data[key][
-            'cnstrctr_params']
-        im, trnsfrm_params = invoque_gui(
+    pipeline_data = deepcopy(
+        pipeline_data)
+    for key in pipeline_data['sequence']:
+        cnstrctr = stage_keys_x_constructors[key]
+        cnstrctr_params = pipeline_data[
+            'data'][key]['cnstrctr_params']
+        im, op_params = deploy_gui(
             im, cnstrctr, cnstrctr_params)
-        pipeline_data[key]['op_params'] = trnsfrm_params
+        pipeline_data[
+            'data'][key]['op_params'] = op_params
     return im, pipeline_data
 
-# def human_guided_im_transform(im):
-#     metadata = {}
-#     metadata['transform_sequence'] = list(
-#         transform_stages.keys())
-#     metadata['trnsfrm_params'] = {}
-#     for key, cnstrctr in transform_stages.keys():
-#         im, trnsfrm_params = invoque_gui(
-#             im, cnstrctr) ## !!! PARAM DATA REQUIRED
-#         metadata['trnsfrm_params'][key] = trnsfrm_params
-#     return im, metadata
-    
+def deploy_human_guided_im_transform_pipeline(cvim):
+    return deploy_human_guided_im_op_pipeline(
+        cvim, transform_pipeline_data)
+
+def deploy_human_guided_im_filter_pipeline(cvim):
+    return deploy_human_guided_im_op_pipeline(
+        cvim, filter_pipeline_data)
+
+# def deploy_human_guided_doc_roi_selection(
+#         doc_key, doc_data, elem_keys):
+#     im = doc_data[doc_key]['preproc_im']
+#     im, out_data = deploy_gui(
+#         im, OCRROI, {'roi_keys': elem_keys})
+#     return out_data['params']
+
+def deploy_human_guided_doc_roi_selection(
+        doc_dat, section_keys):
+    im = doc_dat['preproc_im']
+    im, out_data = deploy_gui(
+        im, OCRROI, {'roi_keys': section_keys})
+    return out_data['params']
+
+def deploy_human_guided_doc_elem_extraction(
+        im, elems_to_extract):
+    im, out_data = deploy_gui(
+        im, OCR, elems_to_extract)
+    return out_data['params']

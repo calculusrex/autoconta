@@ -13,7 +13,7 @@ from constants import *
 from im import display_cv
 
 from document_preprocessing import folder_data__
-
+from load_documents import has_extension
 
 stage_keys_x_constructors = {
     # 'ocr': OCR,
@@ -63,9 +63,6 @@ def folder_data__(project_folder, subfolder_path):
         'metadata': "/".join([
             input_folder, "metadata"]),
     }
-
-def has_extension(extension):
-    return lambda fname: fname.split('.')[-1] == extension
 
 def doc_fnames__(input_folder_data):
     image_fnames = list(

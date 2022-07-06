@@ -8,8 +8,6 @@ from copy import deepcopy
 import functools as ft
 import json
 
-from pdf2image import convert_from_path, convert_from_bytes
-
 from pdf2image.exceptions import (
     PDFInfoNotInstalledError,
     PDFPageCountError,
@@ -19,7 +17,7 @@ from pdf2image.exceptions import (
 from frames import WarpingEditor, OrthogonalRotationEditor, FineRotationEditor, RescaleEditor, CropEditor, DenoiseEditor, DilateErodeEditor, ThresholdEditor
 
 from constants import *
-from im import display_cv
+from im import display_cv, load_image
 
 
 stage_keys_x_constructors = {
@@ -54,14 +52,6 @@ def file_data__from_fname_x_folder(fname, folder_data):
         'fpath': f'{input_folder}/{fname}',
     }
 
-def read_im(filepath):
-    extension = filepath.split('.')[-1].lower()
-    if extension == 'pdf':
-        im = np.array(
-            convert_from_path(filepath)[0])
-    else:
-        im = cv.imread(filepath)
-    return im
 
 def constructor_from_stage_key(key):
     return stage_keys_x_constructors[key]
@@ -96,7 +86,7 @@ def doc_data__from__fdat_x_pipelines(
         'extension': extension
     }
 
-    im = read_im(fpath)
+    im = load_image(fpath)
     pending_pipelines = deepcopy(pipelines)
     pending_pipelines.reverse()
     pending_procs = pending_pipelines.pop()

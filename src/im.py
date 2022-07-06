@@ -4,9 +4,19 @@ import os
 from PIL import Image, ImageTk
 import numpy as np
 
+from pdf2image import convert_from_path, convert_from_bytes
+
+def read_im(filepath):
+    extension = filepath.split('.')[-1].lower()
+    if extension == 'pdf':
+        im = np.array(
+            convert_from_path(filepath)[0])
+    else:
+        im = cv.imread(filepath)
+    return im
 
 def load_image(impath):
-    return cv.imread(impath)
+    return read_im(impath)
 
 def rgb2hex(r,g,b):
     return f'#{int(round(r)):02x}{int(round(g)):02x}{int(round(b)):02x}'

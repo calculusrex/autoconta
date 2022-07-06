@@ -17,6 +17,9 @@ WHITE = rgb2hex(255, 255, 255)
 BLACK = rgb2hex(0, 0, 0)
 GRAY = rgb2hex(64, 64, 64)
 MAGENTA = '#FF00FF'
+GREEN = rgb2hex(47, 190, 0)
+RED = rgb2hex(190, 0, 0)
+BLUE = rgb2hex(0, 80, 190)
 
 FOREGROUND = GRAY
 BACKGROUND = WHITE

@@ -57,13 +57,16 @@ def quad_val_coords__(p0_coords, p1_coords):
         p1_coords['canv']['x'],
         p1_coords['canv']['y'])
         
-### GENERAL EDITOR --------------------------------------------------------------------
+### GENERAL EDITOR -----------------------------------------------
 
 class ImProcEditor(tk.Frame):
-    def __init__(self, root, state_data, im):
+    def __init__(self, root, state_data, im,
+                 main_canv__screen_width_percentage=1/3):
         super().__init__(root)
         self.state_data = state_data
 
+        self.main_canv__screen_width_percentage = main_canv__screen_width_percentage
+        
         self.og_im = im
         self.proc_im = self.og_im.copy()
 
@@ -144,7 +147,8 @@ class ImProcEditor(tk.Frame):
 
     def install_main_canvas(self):
         self.main_canvas = DocumentCanvas(
-            self, self.proc_im)
+            self, self.proc_im,
+            screen_width_percentage=self.main_canv__screen_width_percentage)
         self.main_canvas.grid(row=0, column=0, rowspan=FRAME_ROWSPAN)
         self.load_bindings(
             self.main_canvas, self.main_canvas_bindings)
@@ -212,6 +216,7 @@ class WarpingEditor(ImProcEditor):
         self.mouse_label_event_config(event, 'click')
         im_x = int(round(event.x / self.main_canvas.scale_factor))
         im_y = int(round(event.y / self.main_canvas.scale_factor))
+        selpnts = self.selection_points
         if len(self.selection_points) < 4:
             self.selection_points.append(
                 (im_x, im_y))
@@ -422,7 +427,7 @@ class FineRotationEditor(ImProcEditor):
         self.param_data = {'rotation_angle': self.fine_rotation_angle}
         self.pass_controll_back_to_the_script()
 
-### RESCALE -----------------------------------------------------------------------
+### RESCALE ------------------------------------------------------
 
 class RescaleEditor(ImProcEditor):
     def __init__(self, root, state_data, im):
@@ -657,8 +662,8 @@ class ThresholdEditor(ImProcEditor):
 
         self.proc_key = 'threshold'
 
-        self.block_size = 32 + 1
-        self.constant = 5
+        self.block_size = 12 + 1
+        self.constant = 30
         self.bw_im = cv.cvtColor(
             self.og_im, cv.COLOR_BGR2GRAY)
         self.proc_im = threshold(
@@ -732,10 +737,13 @@ class DocumentDescriber(ImProcEditor):
 class OCRROI(ImProcEditor):
     def __init__(self, root, state_data, im):
         super().__init__(root, state_data, im)
-        self.roi_key_data = self.state_data[
-            'proc_params']['roi_keys']
-        self.roi_keys = list(
-            self.roi_key_data.keys())
+        self.proc_key = 'ocr_roi'
+        # self.roi_key_data = self.state_data[
+        #     'input_params']['roi_keys']
+        # self.roi_keys = list(
+        #     self.roi_key_data.keys())
+        self.roi_keys = self.state_data[
+            'input_params']['roi_keys']
         self.pending_roi_keys = self.roi_keys.copy()
         self.pending_roi_keys.reverse()
         self.roi_data = {}
@@ -770,19 +778,21 @@ class OCRROI(ImProcEditor):
         self.mouse_label_event_config(event, 'click')
         click_coords = self.mouse_coords__(event)
         if bool(self.pending_roi_keys): # not empty
-            print(self.pending_roi_keys)
             if not(bool(self.p0_coords)):
                 # print(self.p0_coords)
                 self.select_first_point(click_coords)
             elif len(self.pending_roi_keys) == 1:
                 self.select_scnd_and_stash_roi(
                     click_coords)
+                self.populate_param_data()
                 self.pass_controll_back_to_the_script()
             else:
                 self.select_scnd_and_stash_roi(
                     click_coords)
 
-
+    def populate_param_data(self):
+        self.param_data = self.roi_data
+                
     def select_first_point(self, click_coords):
         self.p0_coords = click_coords
                 
@@ -810,24 +820,87 @@ class OCRROI(ImProcEditor):
         return len(self.sel_pnts) == 1
 
 class OCR(ImProcEditor):
-    def __init__(self, state_data, gui_data):
-        super().__init__(state_data, gui_data)
+    def __init__(self, root, state_data, im):
+        super().__init__(root, state_data, im,
+                         main_canv__screen_width_percentage=4/5)
+        self.proc_key = 'ocr'
+        self.elems_to_extract = self.state_data['input_params']
+
+        self.augment_main_canvas_bindings([
+            ('<Motion>', self.hover),
+            ('<Button-1>', self.click),
+        ])
+
+        self.ocr_rectangles = []
+        self.selection_point_a = None
+        self.selection_point_b = None
+        self.selection_line = self.main_canvas.create_line(
+            0, 0, 0, 0, fill=BLUE, width=LINE_WIDTH)
+
         self.perform_ocr()
         self.plot_ocr_bounding_boxes()
         # self.bind('<space>', self.apply_ocr),
+
+    def is_box_in_line(self, bounding_box):
+        line = (self.selection_point_a['im'],
+                self.selection_point_b['im'])
+        p0 = (bounding_box['left'],
+              bounding_box['top'])
+        p1 = (p0[0] + bounding_box['width'],
+              p0[1] + bounding_box['height'])
+        box_corners = (p0, p1)
         
+
+        
+    def select_boxes(self):
+        self.selected_boxes = list(
+            filter(self.is_box_in_line,
+                   self.ocr_data_lvl5))
+
+    def click(self, event):
+        self.mouse_label_event_config(event, 'click')
+        im_x = int(round(event.x / self.main_canvas.scale_factor))
+        im_y = int(round(event.y / self.main_canvas.scale_factor))
+        if not(self.selection_point_a):
+            self.selection_point_a = {
+                'im': (im_x, im_y),
+                'canv': (event.x, event.y),
+            }
+        else:
+            self.selection_point_b = {
+                'im': (im_x, im_y),
+                'canv': (event.x, event.y),
+            }
+            self.select_boxes()            
+
+    def hover(self, event):
+        self.mouse_label_event_config(event, 'hover')
+        canv_x, canv_y = event.x, event.y
+        if bool(self.selection_point_a) and not(
+                self.selection_point_b):
+            x0, y0 = self.selection_point_a['canv']
+            self.main_canvas.coords(
+                self.selection_line,
+                x0, y0, canv_x, canv_y)
+                
     def perform_ocr(self):
+        print('performing OCR, please wait...')
         self.ocr_data = dict_from_im(
-            self.proc_im) # !!! or self.og_im, idk which's better
+            self.proc_im)
+        self.ocr_data_lvl5 = list(
+            filter(lambda x: x['level'] == 5,
+                   self.ocr_data))
 
     def plot_ocr_bounding_boxes(self):
-        for box_data in self.ocr_data:
-            self.main_canvas.create_rectangle(
-                *self.scale_by_main_canv_sf(
-                    diag_crnr_coords__(
-                        box_data)),
-                outline=MAGENTA, width=LINE_WIDTH)
-
+        for dat in ocr_data:
+            print(dat, '\n')
+        for box_data in ocr_data_lvl5:
+            self.ocr_rectangles.append(
+                self.main_canvas.create_rectangle(
+                    *self.scale_by_main_canv_sf(
+                        diag_crnr_coords__(
+                            box_data)),
+                    outline=MAGENTA, width=LINE_WIDTH))
         
         
             
@@ -856,19 +929,19 @@ class OCR__obsolete(ImProcEditor):
         self.pipeline_data['improc_progress'][self.__class__.__name__] = progress_data
         parent = self.master
 
-        # VALIDATION --------------------------------------------------------------
+        # VALIDATION ---------------------------------------------
         ocr_validation_stack = self.ocr_data.copy()
         ocr_validation_stack.reverse()
         
-        # -------------------------------------------------------------------------
+        # --------------------------------------------------------
         
-        # -------------------------------------------------------------------------
+        # --------------------------------------------------------
         # NEXT CONSTRUCTOR IN PIPELINE IS DELAYED FOR AFTER THE VALIDATION STAGES -
         # next_frame_constructor = self.pipeline_data['relative_constructors'][
         #     self.__class__.__name__]['following']
         # frame = next_frame_constructor(
         #     parent, self.proc_im.copy(), self.pipeline_data)
-        # -------------------------------------------------------------------------
+        # --------------------------------------------------------
 
         self.destroy()
         frame.grid(
@@ -889,132 +962,3 @@ class OCRValidation(tk.Frame):
         self.canvas = ValidationCanvas(self, self.im)
         self.canvas.grid(row=0, column=0)
         
-
-# class OCRValidation(ImProcEditor):
-#     def __init__(self, master, cvim, pipeline_data):
-#         super().__init__(master, cvim, pipeline_data)
-#         self.load_ocr_data()
-        
-#     def load_ocr_data(self):
-#         previous_frame_constructor = self.pipeline_data['relative_constructors'][
-#             self.__class__.__name__]['previous']
-#         self.ocr_data = pipeline_data['improc_progress'][
-#             previous_frame_constructor.__name__]['ocr_data']
-
-#     def construct_validation_pipeline(self):
-#         for i in range(len(self.ocr_data)):
-#             if i < len(ocr_data) - 1:
-#                 following_constructor = OCRValidationBox
-#                 following_ocr_box_data = 
-
-#         # self.pipeline = list(map(
-#         #     lambda box_data: OCRValidationBox(self, self.og_im, pipeline_data, box_data),
-#         #     self.ocr_data))
-
-### PIPELINE -------------------------------------------------------------------------
-
-## Section Obsoleted
-
-# # def stage_data_from_constructor_and_assoc_data(constructor, assoc_data, pipeline_index):
-# #     return {
-# #         'constructor': constructor,
-# #         'assoc_data': assoc_data,
-# #     }
-
-# # def pipeline_data__(constructor_list, stage_associated_data,
-# # ):
-
-# #     pipeline_data = list(
-# #         map(stage_data_from_constructor_and_assoc_data
-# #             zip(constructor_list, # frame constructor
-# #                 stage_associated_data, # associated data (if any)
-# #                 # next constructor
-# #                 # previous constructor
-
-    
-    
-# #     pipeline_data['improc_params'] = {}
-# #     pipeline_data['improc_progress'] = {}
-# #     return pipeline_data
-
-# def pipeline_data__from__constructor_list(constructor_list):
-#     pipeline_data = {}
-#     pipeline_data['sequence'] = list(
-#         map(lambda x: x.__name__,
-#             constructor_list))
-#     pipeline_data['relative_constructors'] = {}
-#     for i in range(len(constructor_list)):
-#         constructor = constructor_list[i]
-
-#         if i < len(constructor_list) - 1:
-#             following_constructor = constructor_list[i+1]
-#         else:
-#             following_constructor = constructor_list[0]
-
-#         if i == 0:
-#             previous_constructor = constructor_list[-1]
-#         else:
-#             previous_constructor = constructor_list[i-1]
-
-#         pipeline_data['relative_constructors'][constructor.__name__] = {
-#             'following': following_constructor,
-#             'previous': previous_constructor,
-#         }
-
-#     pipeline_data['improc_params'] = {}
-#     pipeline_data['improc_progress'] = {}
-#     return pipeline_data
-
-
-# def run_pipeline(constructor_list, im):
-#     root = tk.Tk()
-#     root.bind('<Control-q>', lambda event: root.destroy())
-
-#     pipeline_data = pipeline_data__from__constructor_list(
-#         constructor_list)
-
-#     improc = constructor_list[0](
-#         root, im, pipeline_data)
-#     improc.grid(row=0, column=0, rowspan=FRAME_ROWSPAN)
-
-#     # root.mainloop()
-
-# ### -----------------------------------------------------------------------------------
-
-# if __name__ == '__main__':
-#     print('frames.py')
-
-#     import os
-#     import cv2 as cv
-
-#     #clean_invoice_fname = '../test_data/609d5d3c4d120e370de52b70_invoice-lp-light-border.png'
-#     samples_path = '../test_data/samples_2021'
-#     samples_fnames = list(
-#         map(lambda fnm: f'{samples_path}/{fnm}',
-#             os.listdir('../test_data/samples_2021')))
-#     im = cv.imread(samples_fnames[2])
-
-#     ## ----------------------------------------------------------------------
-
-#     # improc_pipeline_sequence = [
-#     #     WarpingEditor,
-#     #     OrthogonalRotationEditor,
-#     #     FineRotationEditor,
-#     #     RescaleEditor,
-#     #     CropEditor,
-#     #     DenoiseEditor,
-#     #     ThresholdEditor,
-#     #     DilateErodeEditor,
-#     #     OCR,
-#     # ]
-
-#     # run_pipeline(
-#     #     improc_pipeline_sequence, im)
-
-#     ## ----------------------------------------------------------------------
-
-#     im = cv.imread('improc_images/DilateErodeEditor.png')
-
-#     pipeline_sequence = [OCR]
-#     run_pipeline(pipeline_sequence, im)
-    
