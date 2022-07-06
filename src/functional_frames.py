@@ -2,7 +2,7 @@ import tkinter as tk
 # import tk
 # import pytesseract as tesseract
 # import os
-# import numpy as np
+import numpy as np
 import cv2 as cv
 from pprint import pprint
 import functools as ft
@@ -824,7 +824,11 @@ class OCR(ImProcEditor):
         super().__init__(root, state_data, im,
                          main_canv__screen_width_percentage=4/5)
         self.proc_key = 'ocr'
-        self.elems_to_extract = self.state_data['input_params']
+        self.elems_to_extract = self.state_data[
+            'input_params'].copy()
+        self.elems_to_extract.reverse()
+        print('please_select: ', self.elems_to_extract[-1])
+        self.extracted_data = {}
 
         self.augment_main_canvas_bindings([
             ('<Motion>', self.hover),
@@ -841,21 +845,41 @@ class OCR(ImProcEditor):
         self.plot_ocr_bounding_boxes()
         # self.bind('<space>', self.apply_ocr),
 
-    def is_box_in_line(self, bounding_box):
-        line = (self.selection_point_a['im'],
-                self.selection_point_b['im'])
-        p0 = (bounding_box['left'],
+    def is_point_in_box(self, point, bounding_box):
+        p_X = point
+        p_A = (bounding_box['left'],
               bounding_box['top'])
-        p1 = (p0[0] + bounding_box['width'],
-              p0[1] + bounding_box['height'])
-        box_corners = (p0, p1)
-        
+        p_B = (p_A[0] + bounding_box['width'],
+              p_A[1] + bounding_box['height'])
+        box_corners = (p_A, p_B)
+        pAx, pAy = p_A
+        pBx, pBy = p_B
+        pXx, pXy = p_X
+        horizontally = pXx > pAx and pXx < pBx
+        vertically = pXy > pAy and pXy < pBy
+        return horizontally and vertically
 
+    def is_box_in_line(self, bounding_box, sample_n=100):
+        p0, p1 = (self.selection_point_a['im'],
+                  self.selection_point_b['im'])
+        A = np.array(p0)
+        B = np.array(p1)
+        D = B - A
+        interpolated = []
+        scales = np.arange(0, 1, 1/sample_n)
+        for i in range(sample_n):
+            interpolated.append(
+                A + D * scales[i])
+        return ft.reduce(
+            lambda a, b: a or b,
+            map(lambda p: self.is_point_in_box(p, bounding_box),
+                interpolated))            
         
     def select_boxes(self):
         self.selected_boxes = list(
             filter(self.is_box_in_line,
                    self.ocr_data_lvl5))
+        print('selected_boxes: ', self.selected_boxes)
 
     def click(self, event):
         self.mouse_label_event_config(event, 'click')
@@ -871,7 +895,23 @@ class OCR(ImProcEditor):
                 'im': (im_x, im_y),
                 'canv': (event.x, event.y),
             }
-            self.select_boxes()            
+            self.select_boxes()
+            self.extracted_data[
+                self.elems_to_extract[-1]] = self.selected_boxes
+            self.elems_to_extract.pop()
+            if len(self.elems_to_extract) == 0:
+                self.populate_param_data()
+                self.pass_controll_back_to_the_script()
+            else:
+                print(
+                    'please_select: ',
+                    self.elems_to_extract[-1])
+                self.selection_point_a = None
+                self.selection_point_b = None
+
+
+    def populate_param_data(self):
+        self.param_data = self.extracted_data
 
     def hover(self, event):
         self.mouse_label_event_config(event, 'hover')
@@ -892,9 +932,9 @@ class OCR(ImProcEditor):
                    self.ocr_data))
 
     def plot_ocr_bounding_boxes(self):
-        for dat in ocr_data:
-            print(dat, '\n')
-        for box_data in ocr_data_lvl5:
+        # for dat in self.ocr_data:
+        #     print(dat, '\n')
+        for box_data in self.ocr_data_lvl5:
             self.ocr_rectangles.append(
                 self.main_canvas.create_rectangle(
                     *self.scale_by_main_canv_sf(
