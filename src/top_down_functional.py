@@ -13,8 +13,11 @@ from constants import *
 from im import display_cv, crop
 
 from document_preprocessing import folder_data__
-from human import deploy_human_guided_im_transform_pipeline, deploy_human_guided_im_filter_pipeline, deploy_human_guided_doc_roi_selection, deploy_human_guided_doc_elem_extraction
+
+from human import deploy_human_guided_im_transform_pipeline, deploy_human_guided_im_filter_pipeline, human_select_rois, human_extract_elems, human_erase_orthogonal_lines
+
 from load_documents import load_raw_document_data, load_preproc_doc_data
+from post_ocr_dataproc import string_from_selected_ocr_data
 
 elements_of_interest = {
     'header': [
@@ -140,7 +143,7 @@ def crop_by_rois_data(im, rois_data):
 
 # def documents_segments(doc_data):
 #     def select_rois__(doc_key):
-#         return deploy_human_guided_doc_roi_selection(
+#         return human_select_rois(
 #             doc_key, doc_data, list(doc_sections.keys()))
 
 #     def crop__(im_x_cornerss_data):
@@ -175,7 +178,7 @@ def points_as_tuples(data):
     )
 
 def select_doc_section_rois(doc_dat, section_keys):
-    return deploy_human_guided_doc_roi_selection(
+    return human_select_rois(
         doc_dat, section_keys)
 
 def augment_wth_doc_sections(doc_dat, elemss_of_interest):
@@ -192,20 +195,76 @@ def augment_wth_doc_sections(doc_dat, elemss_of_interest):
         doc_dat['sections'][roi_key]['data'] = rois_data[roi_key]
         doc_dat['sections'][roi_key]['im'] = section_im
 
-def ocr_extract_elements(im, elems_to_extract):
-    return deploy_human_guided_doc_elem_extraction(
-        im, elems_to_extract)
+def doc_sections__(doc_dat, elemss_of_interest):
+    doc_section_keys = list(elemss_of_interest.keys())
+    rois_data = select_doc_section_rois(
+        doc_dat, doc_section_keys)
+    doc_dat['sections'] = {}
+    data = {}
+    for roi_key in rois_data.keys():
+        doc_dat['sections'][roi_key] = {}
+        section_im = crop(
+            doc_dat['preproc_im'],
+            *points_as_tuples(
+                rois_data[roi_key]))
+        doc_dat['sections'][roi_key]['data'] = rois_data[roi_key]
+        doc_dat['sections'][roi_key]['im'] = section_im
+        data[roi_key] = doc_dat['sections'][roi_key]
+    return data
 
 def augment_wth_extracted_data(doc_dat, elemss_of_interest):
     for section_key in doc_dat['sections'].keys():
         elems_to_extract = elemss_of_interest[section_key]
-        extracted_elem_data = ocr_extract_elements(
+        im, params = human_erase_orthogonal_lines(
+            doc_dat['sections'][section_key]['im'])
+        doc_dat['sections'][section_key]['im'] = im
+        doc_dat['sections'][section_key][
+            'line_erase_params'] = params
+        extracted_elem_data = human_extract_elems(
             doc_dat['sections'][section_key]['im'],
             elems_to_extract)
         doc_dat['sections'][section_key][
             'extracted'] = extracted_elem_data
 
+def extracted_data__from_doc_sections(
+        doc_dat, section_data, elemss_of_interest):
+    data = {}
+    for section_key in section_data.keys():
+        elems_to_extract = elemss_of_interest[section_key]
+        im, params = human_erase_orthogonal_lines(
+            section_data[section_key]['im'])
+        section_data[section_key]['im'] = im
+        section_data[section_key][
+            'line_erase_params'] = params
+        extracted_elem_data = human_extract_elems(
+            section_data[section_key]['im'],
+            elems_to_extract)
+        section_data[section_key][
+            'extracted'] = extracted_elem_data
+        data[section_key] = extracted_elem_data
+    return data
+
+
 def extract_data(doc_data, elemss_of_interest):
+    extracted_string_data = {}
+    for key in doc_data.keys():
+        section_data = doc_sections__(
+            doc_data[key], elemss_of_interest)
+        extracted_data = extracted_data__from_doc_sections(
+            doc_data[key], section_data, elemss_of_interest)
+        string_data = {}
+        for section_key in extracted_data.keys():
+            section_data = {}
+            for elem_key in extracted_data[section_key]:
+                section_data[
+                    elem_key] = string_from_selected_ocr_data(
+                        extracted_data[section_key][elem_key])
+            string_data[section_key] = section_data
+        extracted_string_data[key] = string_data
+    return doc_data, extracted_string_data
+
+
+def extract_data__imperative(doc_data, elemss_of_interest):
     for key in doc_data.keys():
         augment_wth_doc_sections(
             doc_data[key], elemss_of_interest)
@@ -255,5 +314,5 @@ if __name__ == '__main__':
     # xtracted_data = data_entry__preprocessing_phase(
     #     folder_data, write_out=True)
 
-    xtracted = data_entry__extraction_phase(
+    doc_data, string_data = data_entry__extraction_phase(
         folder_data, elements_of_interest)

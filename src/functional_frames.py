@@ -11,7 +11,7 @@ import collections
 from canvas import canvas_from_im, DocumentCanvas, ValidationCanvas
 from im import imwarp, rgb2hex, display_cv, rotate, orthogonal_rotate, rotate_without_clipping, display_cv, denoise, dilate_erode, threshold, crop, im_rescale, dict_from_im #, rotate_by_90deg
 from constants import *
-
+from erase_lines import erase_orthogonal_lines
 
 corner_data = {
     'UPPER_LEFT': {'outward': {'x_factor': -1,
@@ -715,6 +715,74 @@ class ThresholdEditor(ImProcEditor):
         }
         self.pass_controll_back_to_the_script()
 
+### ERASE ----------------------------------------------------
+
+class OrthogonalLineEraser(ImProcEditor):
+    def __init__(self, root, state_data, im):
+        super().__init__(root, state_data, im)
+
+        self.proc_key = 'orthogonal_line_eraser'
+
+        self.threshold = 0.5
+        self.radius = 6
+        self.proc_im = erase_orthogonal_lines(
+            self.og_im,
+            self.threshold, self.radius, test_run=True)
+
+        self.add_label('threshold')
+        self.add_label('radius')
+        self.augment_main_canvas_bindings([
+            ('<space>', self.apply_erase),
+            ('<Button-4>', self.increase_threshold),
+            ('<Button-5>', self.decrease_threshold),
+            ('<Control-Button-4>', self.increase_radius),
+            ('<Control-Button-5>', self.decrease_radius),
+        ])
+        self.update_main_canvas()
+
+    def explore_parameters(
+            self, event,
+            threshold_offset=None, radius_offset=None):
+        if threshold_offset:
+            self.threshold += threshold_offset
+            self.labels['threshold'].config(
+                text=f'threshold\n{self.threshold}')
+        if radius_offset:
+            self.radius += radius_offset
+            self.labels['radius'].config(
+                text=f'radius\n{self.radius}')
+        if self.radius >= 1:
+            self.proc_im = erase_orthogonal_lines(
+                self.og_im,
+                self.threshold, self.radius, test_run=True)
+            self.update_main_canvas()
+
+    def increase_threshold(self, event):
+        return self.explore_parameters(
+            event, threshold_offset=0.05)
+    def decrease_threshold(self, event):
+        return self.explore_parameters(
+            event, threshold_offset=-0.05)
+    def increase_radius(self, event):
+        return self.explore_parameters(
+            event, radius_offset=1)
+    def decrease_radius(self, event):
+        if self.radius >= 1:
+            return self.explore_parameters(
+                event, radius_offset=-1)
+
+    def apply_erase(self, event):
+        self.proc_im = erase_orthogonal_lines(
+            self.og_im,
+            self.threshold, self.radius)
+        self.param_data = {
+            'threshold': self.threshold,
+            'radius': self.radius
+        }
+        self.pass_controll_back_to_the_script()
+
+
+
 ### OPRICAL CHARACTER RECOGNITION (OCR) ----------------------
 
 def diag_crnr_coords__(box_data):
@@ -821,6 +889,7 @@ class OCRROI(ImProcEditor):
 
 class OCR(ImProcEditor):
     def __init__(self, root, state_data, im):
+        im = erase_orthogonal_lines(im)
         super().__init__(root, state_data, im,
                          main_canv__screen_width_percentage=4/5)
         self.proc_key = 'ocr'

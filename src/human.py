@@ -8,7 +8,7 @@ from copy import deepcopy
 import functools as ft
 import json
 
-from functional_frames import WarpingEditor, OrthogonalRotationEditor, FineRotationEditor, RescaleEditor, CropEditor, DenoiseEditor, DilateErodeEditor, ThresholdEditor, OCRROI, OCR
+from functional_frames import WarpingEditor, OrthogonalRotationEditor, FineRotationEditor, RescaleEditor, CropEditor, DenoiseEditor, DilateErodeEditor, ThresholdEditor, OCRROI, OCR, OrthogonalLineEraser
 
 from constants import *
 
@@ -112,15 +112,20 @@ def deploy_human_guided_im_filter_pipeline(cvim):
 #         im, OCRROI, {'roi_keys': elem_keys})
 #     return out_data['params']
 
-def deploy_human_guided_doc_roi_selection(
+def human_select_rois(
         doc_dat, section_keys):
     im = doc_dat['preproc_im']
     im, out_data = deploy_gui(
         im, OCRROI, {'roi_keys': section_keys})
     return out_data['params']
 
-def deploy_human_guided_doc_elem_extraction(
+def human_extract_elems(
         im, elems_to_extract):
     im, out_data = deploy_gui(
         im, OCR, elems_to_extract)
     return out_data['params']
+
+def human_erase_orthogonal_lines(im):
+    im, out_data = deploy_gui(
+        im, OrthogonalLineEraser, {})
+    return im, out_data
