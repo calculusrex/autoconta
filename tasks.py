@@ -66,11 +66,11 @@
 # # - implement a single-click text selection tool for selecting the ocr box for \
     # the header fields (document-id, supplier, total, date)
 
-# # - implement a box-selection tool for selecting the article frame header \
+#x# - implement a box-selection tool for selecting the article frame header \
     # and another for selecting the actual table, with a dataframe assembling \
     # function (which takes into account the position of the bounding boxes)
 
-# # - implement roi selection for document constituents
+#x# - implement roi selection for document constituents
 
 #x# - pass controll back to the script by destroying the root widget
 
@@ -82,6 +82,13 @@
   #x# - implement the image loading facility and the imperative script loading the images
   #x# - execute and debug till functional
   #x# - implement save to disk for the new functional design
-# # - implement a OCR pipeline in the functional style
+#x# - implement a OCR pipeline in the functional style
 
-# # - extract ocr recognized data from a few documents.
+#x# - extract ocr recognized data from a few documents.
+
+#x# - implement skip in all gui frames
+  #x# - run a improc gui testbench
+    # it was already done, i just had to call a function i wrote
+#x# - implement cancel in all gui frames
+# # - implement box select for what's not being read by tessract on the whole document
+# # - make a table processing ocr program with which to extract data from tables

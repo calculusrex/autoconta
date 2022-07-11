@@ -288,6 +288,8 @@ def data_entry__extraction_phase(
     # export_to_pag_interface(
     #     extracted_data)
     return extracted_data
+
+
     
 if __name__ == '__main__':
     print('top_down_functional.py\n')

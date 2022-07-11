@@ -60,12 +60,11 @@ def quad_val_coords__(p0_coords, p1_coords):
 ### GENERAL EDITOR -----------------------------------------------
 
 class ImProcEditor(tk.Frame):
-    def __init__(self, root, state_data, im,
-                 main_canv__screen_width_percentage=1/3):
+    def __init__(self, root, state_data, im):
         super().__init__(root)
         self.state_data = state_data
 
-        self.main_canv__screen_width_percentage = main_canv__screen_width_percentage
+        self.main_canv__screen_width_percentage = 1/3
         
         self.og_im = im
         self.proc_im = self.og_im.copy()
@@ -83,8 +82,8 @@ class ImProcEditor(tk.Frame):
              lambda e: self.mouse_label_event_config(e, 'hover')),
             ('<Button-1>',
              lambda e: self.mouse_label_event_config(e, 'click')),
-            ('<Escape>',
-             self.cancel), ('<Control-c>', self.cancel),
+            ('<Escape>', self.skip),
+            ('<Control-c>', self.cancel),
             ('<Control-z>',
              lambda e: self.previous_stage()),
         ]
@@ -123,7 +122,7 @@ class ImProcEditor(tk.Frame):
             ns)
         
     def skip(self, event):
-        self.param_data = {}
+        self.param_data = 'skipped by operator'
         self.pass_controll_back_to_the_script()
 
     def add_label(self, key):
@@ -164,7 +163,8 @@ class ImProcEditor(tk.Frame):
     def cancel(self, event):
         parent = self.master
         frame_constructor = self.__class__
-        frame = frame_constructor(parent, self.og_im.copy(), self.pipeline_data)
+        frame = frame_constructor(
+            self.master, self.state_data, self.og_im)
         self.destroy()
         frame.grid(
             row=0, column=0, rowspan=FRAME_ROWSPAN)
@@ -727,7 +727,9 @@ class OrthogonalLineEraser(ImProcEditor):
         self.radius = 6
         self.proc_im = erase_orthogonal_lines(
             self.og_im,
-            self.threshold, self.radius, test_run=True)
+            threshold=self.threshold,
+            radius=self.radius,
+            test_run=True)
 
         self.add_label('threshold')
         self.add_label('radius')
@@ -754,7 +756,9 @@ class OrthogonalLineEraser(ImProcEditor):
         if self.radius >= 1:
             self.proc_im = erase_orthogonal_lines(
                 self.og_im,
-                self.threshold, self.radius, test_run=True)
+                threshold=self.threshold,
+                radius=self.radius,
+                test_run=True)
             self.update_main_canvas()
 
     def increase_threshold(self, event):
@@ -890,8 +894,8 @@ class OCRROI(ImProcEditor):
 class OCR(ImProcEditor):
     def __init__(self, root, state_data, im):
         im = erase_orthogonal_lines(im)
-        super().__init__(root, state_data, im,
-                         main_canv__screen_width_percentage=4/5)
+        super().__init__(root, state_data, im)
+        self.main_canv__screen_width_percentage = 4/5
         self.proc_key = 'ocr'
         self.elems_to_extract = self.state_data[
             'input_params'].copy()
