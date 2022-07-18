@@ -51,9 +51,14 @@ class DocumentCanvas(tk.Canvas):
             self.scale_factor = self.canv_h / self.im_h
             self.canv_w = int(self.im_w * self.scale_factor)
         else:
-            self.canv_w = int(round(screen_w * screen_width_percentage))
+            self.canv_w = int(
+                round(screen_w * screen_width_percentage))
             self.scale_factor = self.canv_w / self.im_w
             self.canv_h = int(self.im_h * self.scale_factor)
+            if self.canv_h > screen_h:
+                self.canv_h = screen_h
+                self.scale_factor = self.canv_w / self.im_w
+                self.canv_w = int(self.im_w * self.scale_factor)
 
         super().__init__(
             master, width=self.canv_w, height=self.canv_h, bg=bg)

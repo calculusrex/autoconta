@@ -4,7 +4,8 @@ import Levenshtein
 
 
 def leven_dist_to__(cs0):
-    def dist(cs1):
+    def dist(val):
+        cs1 = str(val)
         return Levenshtein.distance(
             cs0, cs1)
     return dist

@@ -8,7 +8,9 @@ from copy import deepcopy
 import functools as ft
 import json
 
-from functional_frames import WarpingEditor, OrthogonalRotationEditor, FineRotationEditor, RescaleEditor, CropEditor, DenoiseEditor, DilateErodeEditor, ThresholdEditor, OCRROI, OCR, OrthogonalLineEraser
+from functional_frames import WarpingEditor, OrthogonalRotationEditor, FineRotationEditor, RescaleEditor, CropEditor, DenoiseEditor, DilateErodeEditor, ThresholdEditor, OCRROI, OCR, OrthogonalLineEraser, OCRValidation
+from history import load_historical_data
+
 
 from constants import *
 
@@ -129,3 +131,75 @@ def human_erase_orthogonal_lines(im):
     im, out_data = deploy_gui(
         im, OrthogonalLineEraser, {})
     return im, out_data
+
+def human_validate_elem(im, elem_data, hist_data):
+    input_data = {
+        'element': elem_data,
+        'historical': hist_data,
+    }
+    validated_data = deploy_gui(
+        im, OCRValidation, input_data)
+    return validated_data
+
+
+
+if __name__ == '__main__':
+    print('human.py\n')
+
+    project_folder = os.getcwd()
+
+    subfolders = ['2022_06_26', '2022_06_27']
+
+    subfolder_path = "/".join([
+        'test_data',
+        'levike_facturi_test',
+        subfolders[0]])
+
+    history_path = "/".join([
+        'test_data',
+        'levike_facturi_test',
+        'saga_history'])
+
+    bills_fpath = "/".join([
+        history_path,
+        'intrari_facturi_ardeleanu__20_06_2022.csv'])
+
+    items_fpath = "/".join([
+        history_path,
+        'intrari_articole_ardeleanu__20_06_2022.csv'])
+
+    working_folder = "/".join([
+        project_folder, subfolder_path])
+
+    folder_data = {
+        'project_folder': project_folder,
+        'subfolders': subfolders,
+        'working_folder': working_folder,
+        'subfolder_path': subfolder_path,
+        'history_path': history_path,
+        'bills_fpath': bills_fpath,
+        'items_fpath': items_fpath,
+    }
+    
+
+    hist = load_historical_data(folder_data)
+
+    elem_im = cv.imread('elem_im.png')
+    with open('elem_data.json', 'r') as f:
+        elem_data = json.load(f)
+
+    print(elem_data)
+
+    root = init_gui()
+    state_data = {
+        'input_params': {
+            'element': elem_data,
+            'historical': hist,
+        }
+    }
+    frame = OCRValidation(
+        root, state_data, elem_im)
+
+    deploy_(frame)
+
+    

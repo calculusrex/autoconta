@@ -12,6 +12,8 @@ from canvas import canvas_from_im, DocumentCanvas, ValidationCanvas
 from im import imwarp, rgb2hex, display_cv, rotate, orthogonal_rotate, rotate_without_clipping, display_cv, denoise, dilate_erode, threshold, crop, im_rescale, dict_from_im #, rotate_by_90deg
 from constants import *
 from erase_lines import erase_orthogonal_lines
+from post_ocr_dataproc import interpret, historical
+
 
 corner_data = {
     'UPPER_LEFT': {'outward': {'x_factor': -1,
@@ -56,6 +58,18 @@ def quad_val_coords__(p0_coords, p1_coords):
         p0_coords['canv']['y'],
         p1_coords['canv']['x'],
         p1_coords['canv']['y'])
+
+def cnvrt_2_topLeft_n_bttmRight(a, b):
+    ax, ay = a
+    bx, by = b
+    tl_x = min(ax, bx)
+    br_x = max(ax, bx)
+    tl_y = min(ay, by)
+    br_y = max(ay, by)
+    return (
+        (tl_x, tl_y),
+        (br_x, br_y),
+    )
         
 ### GENERAL EDITOR -----------------------------------------------
 
@@ -66,7 +80,7 @@ class ImProcEditor(tk.Frame):
 
         self.main_canv__screen_width_percentage = 1/3
         
-        self.og_im = im
+        self.og_im = im.copy()
         self.proc_im = self.og_im.copy()
 
         self.labels = {}
@@ -118,11 +132,12 @@ class ImProcEditor(tk.Frame):
 
     def scale_by_main_canv_sf(self, ns):
         return map(
-            lambda n: n * self.main_canvas.scale_factor,
+            lambda n: int(round(n * self.main_canvas.scale_factor)),
             ns)
         
     def skip(self, event):
-        self.param_data = 'skipped by operator'
+        self.proc_im = self.og_im
+        self.param_data = 'skipped by human operator'
         self.pass_controll_back_to_the_script()
 
     def add_label(self, key):
@@ -587,10 +602,17 @@ class FilteringEditor(ImProcEditor):
         else:
             self.min_kernel_size_assertion = lambda inst: inst.kernel_size >= 3
 
-        self.add_label('iteration_n')
-        self.add_label('kernel_size')
         self.iteration_n = 1
         self.kernel_size = 1
+
+        self.add_label('iteration_n')
+        self.add_label('kernel_size')
+
+        self.labels['iteration_n'].config(
+            text=f'iteration_n\n{self.iteration_n}')
+        self.labels['kernel_size'].config(
+            text=f'kernel_size\n{self.kernel_size}')
+
         self.augment_main_canvas_bindings([
             ('<space>', self.apply_filter),
             ('<Button-4>', self.increase_kernel_size),
@@ -662,7 +684,7 @@ class ThresholdEditor(ImProcEditor):
 
         self.proc_key = 'threshold'
 
-        self.block_size = 12 + 1
+        self.block_size = 80 + 1
         self.constant = 30
         self.bw_im = cv.cvtColor(
             self.og_im, cv.COLOR_BGR2GRAY)
@@ -670,6 +692,12 @@ class ThresholdEditor(ImProcEditor):
             self.bw_im, self.block_size, self.constant)
         self.add_label('block_size')
         self.add_label('constant')
+
+        self.labels['block_size'].config(
+            text=f'block_size\n{self.block_size}')
+        self.labels['constant'].config(
+            text=f'constant\n{self.constant}')
+
         self.augment_main_canvas_bindings([
             ('<space>', self.apply_threshold),
             ('<Button-4>', self.increase_block_size),
@@ -789,7 +817,7 @@ class OrthogonalLineEraser(ImProcEditor):
 
 ### OPRICAL CHARACTER RECOGNITION (OCR) ----------------------
 
-def diag_crnr_coords__(box_data):
+def quad_val_coords__from_ocr_elem_data(box_data):
     x0, y0 = box_data['left'], box_data['top']
     w, h = box_data['width'], box_data['height']
     x1, y1 = x0 + w, y0 + h
@@ -823,12 +851,13 @@ class OCRROI(ImProcEditor):
         self.p0_coords = None
         create_rectangle = self.main_canvas.create_rectangle
         self.selection_rectangle = create_rectangle(
-            0, 0, 0, 0, outline=MAGENTA, width=LINE_WIDTH)
+            0, 0, 0, 0, outline=BLUE, width=1.5)
         self.augment_main_canvas_bindings([
             ('<Motion>', self.hover),
             ('<Button-1>', self.click),
         ])
         self.main_canvas.focus_set()
+        self.main_canvas.install_crosshairs()
         self.add_label('cw_roi')
         self.labels['cw_roi'].config(
             text=f'selectează regiune:\n{self.current_roi_key()}')
@@ -841,6 +870,7 @@ class OCRROI(ImProcEditor):
         
     def hover(self, event):
         self.mouse_label_event_config(event, 'hover')
+        self.main_canvas.update_crosshairs(event)
         hover_coords = self.mouse_coords__(event)
         if bool(self.p0_coords):
             self.draw_selection_rectangle(
@@ -893,30 +923,69 @@ class OCRROI(ImProcEditor):
 
 class OCR(ImProcEditor):
     def __init__(self, root, state_data, im):
-        im = erase_orthogonal_lines(im)
         super().__init__(root, state_data, im)
         self.main_canv__screen_width_percentage = 4/5
+        self.update_main_canvas()
+        self.main_canvas.install_crosshairs()
+
         self.proc_key = 'ocr'
         self.elems_to_extract = self.state_data[
             'input_params'].copy()
+        print('\n', self.elems_to_extract, '\n')
         self.elems_to_extract.reverse()
-        print('please_select: ', self.elems_to_extract[-1])
         self.extracted_data = {}
 
+        self.box_select_mode = False
         self.augment_main_canvas_bindings([
             ('<Motion>', self.hover),
             ('<Button-1>', self.click),
+            ('b', lambda e: self.toggle_box_select_mode()),
+            ('n', lambda e: self.unavailable_elem_val()),
         ])
 
         self.ocr_rectangles = []
         self.selection_point_a = None
         self.selection_point_b = None
         self.selection_line = self.main_canvas.create_line(
-            0, 0, 0, 0, fill=BLUE, width=LINE_WIDTH)
+            0, 0, 0, 0, fill=BLUE, width=3)
+        self.selection_box = self.main_canvas.create_rectangle(
+            0, 0, 0, 0, outline=BLUE, width=1.5)
+        
+        self.add_label('elem_to_select')
+        self.labels['elem_to_select'].config(
+            text="\n".join(
+                ['please_select',
+                 self.elems_to_extract[-1]['key']]))
 
         self.perform_ocr()
         self.plot_ocr_bounding_boxes()
         # self.bind('<space>', self.apply_ocr),
+
+    def unavailable_elem_val(self):
+        key = self.elems_to_extract[-1]['key']
+        type_ = self.elems_to_extract[-1]['type']
+        self.extracted_data[key] = {
+            'box_data': None,
+            'key': key,
+            'type': type_}
+        self.elems_to_extract.pop()
+        if len(self.elems_to_extract) == 0:
+            self.populate_param_data()
+            self.pass_controll_back_to_the_script()
+        else:
+            self.labels['elem_to_select'].config(
+                text="\n".join(
+                    ['please_select',
+                     self.elems_to_extract[-1]['key']]))
+
+
+    def toggle_box_select_mode(self):
+        if self.box_select_mode:
+            self.box_select_mode = False
+            self.plot_ocr_bounding_boxes()
+        else:
+            self.box_select_mode = True
+            self.clear_ocr_bounding_boxes()
 
     def is_point_in_box(self, point, bounding_box):
         p_X = point
@@ -952,7 +1021,19 @@ class OCR(ImProcEditor):
         self.selected_boxes = list(
             filter(self.is_box_in_line,
                    self.ocr_data_lvl5))
-        print('selected_boxes: ', self.selected_boxes)
+        # print('selected_boxes: ', self.selected_boxes)
+
+    def ocr_proc_selected_box(self):
+        a, b = cnvrt_2_topLeft_n_bttmRight(
+            self.selection_point_a['im'],
+            self.selection_point_b['im']
+        )    
+        im = crop(
+            self.og_im, a, b)
+        data = dict_from_im(im)
+        data_lvl5 = list(filter(lambda x: x['level'] == 5,
+                                data))
+        return data_lvl5
 
     def click(self, event):
         self.mouse_label_event_config(event, 'click')
@@ -968,33 +1049,64 @@ class OCR(ImProcEditor):
                 'im': (im_x, im_y),
                 'canv': (event.x, event.y),
             }
-            self.select_boxes()
-            self.extracted_data[
-                self.elems_to_extract[-1]] = self.selected_boxes
+            if self.box_select_mode: # when tesseract hasn't picked up the text of interest, we box select the image subset containing all of it to be sent individually to be ocr extracted.
+                box_data = self.ocr_proc_selected_box()
+                key = self.elems_to_extract[-1]['key']
+                type_ = self.elems_to_extract[-1]['type']
+                hand_selection_box_coos = quad_val_coords__(
+                    self.selection_point_a,
+                    self.selection_point_b)
+                self.extracted_data[key] = {
+                    'box_data': box_data,
+                    'key': key,
+                    'hand_selection': hand_selection_box_coos,
+                    'type': type_}
+                print(
+                    self.extracted_data[key], '\n')
+                self.toggle_box_select_mode() # return to normal mode of operation
+            else: # line select mode
+                self.select_boxes()
+                key = self.elems_to_extract[-1]['key']
+                type_ = self.elems_to_extract[-1]['type']
+                self.extracted_data[key] = {
+                    'box_data': self.selected_boxes,
+                    'key': key,
+                    'type': type_}
+                print(
+                    self.extracted_data[key], '\n')
             self.elems_to_extract.pop()
             if len(self.elems_to_extract) == 0:
                 self.populate_param_data()
                 self.pass_controll_back_to_the_script()
             else:
-                print(
-                    'please_select: ',
-                    self.elems_to_extract[-1])
+                self.labels['elem_to_select'].config(
+                    text="\n".join(
+                        ['please_select',
+                         self.elems_to_extract[-1]['key']]))
+                # print(
+                #     'please_select: ',
+                #     self.elems_to_extract[-1])
                 self.selection_point_a = None
                 self.selection_point_b = None
-
 
     def populate_param_data(self):
         self.param_data = self.extracted_data
 
     def hover(self, event):
         self.mouse_label_event_config(event, 'hover')
+        self.main_canvas.update_crosshairs(event)
         canv_x, canv_y = event.x, event.y
         if bool(self.selection_point_a) and not(
                 self.selection_point_b):
             x0, y0 = self.selection_point_a['canv']
-            self.main_canvas.coords(
-                self.selection_line,
-                x0, y0, canv_x, canv_y)
+            if self.box_select_mode:
+                self.main_canvas.coords(
+                    self.selection_box,
+                    x0, y0, canv_x, canv_y)                
+            else:
+                self.main_canvas.coords(
+                    self.selection_line,
+                    x0, y0, canv_x, canv_y)
                 
     def perform_ocr(self):
         print('performing OCR, please wait...')
@@ -1004,6 +1116,10 @@ class OCR(ImProcEditor):
             filter(lambda x: x['level'] == 5,
                    self.ocr_data))
 
+    def clear_ocr_bounding_boxes(self):
+        for i in self.ocr_rectangles:
+            self.main_canvas.delete(i)
+
     def plot_ocr_bounding_boxes(self):
         # for dat in self.ocr_data:
         #     print(dat, '\n')
@@ -1011,67 +1127,138 @@ class OCR(ImProcEditor):
             self.ocr_rectangles.append(
                 self.main_canvas.create_rectangle(
                     *self.scale_by_main_canv_sf(
-                        diag_crnr_coords__(
+                        quad_val_coords__from_ocr_elem_data(
                             box_data)),
                     outline=MAGENTA, width=LINE_WIDTH))
+
+class OCRValidation(ImProcEditor):
+    def __init__(self, root, state_data, im):
+        super().__init__(root, state_data, im)
+        self.main_canv__screen_width_percentage = 2/3
+        self.update_main_canvas()
+
+        self.proc_key = 'validation'
+
+        self.elem_data = self.state_data[
+            'input_params']['element']
+        self.ocr_data = self.elem_data['box_data']
+
+        self.history = self.state_data[
+            'input_params']['historical']
+        self.highlight_rects = []
+        self.draw_highlights()
+
+        self.entry = tk.Entry(self)
+        self.entry.grid(row=0, column=1)
+        self.load_bindings(
+            self.entry, [
+                ('<Return>', lambda e: self.proceed_with_entry()),
+                ('<Escape>', lambda e: self.cancel_entry()),
+            ])
+
+        self.augment_main_canvas_bindings([
+            ('w', self.overwrite),
+            # ('<Motion>', self.hover),
+            # ('<Button-1>', self.click),
+            ('<space>', lambda e: self.proceed()),
+        ])
+        self.interpretation_options = self.interpret()
+
+        self.historical = historical(
+            self.elem_data, self.history)
         
+        print(self.interpretation_options)
+        self.install_buttons()
+
+    def interpret(self):
+        return interpret(self.elem_data)
+    
+    def install_buttons(self):
+        c = 1
         
-            
-
-class OCR__obsolete(ImProcEditor):
-    def __init__(self, master, cvim, pipeline_data):
-        super().__init__(master, cvim, pipeline_data)
-        self.perform_ocr()
-        self.bind('<space>', self.apply_ocr),
-
-    def perform_ocr(self):
-        self.ocr_data = dict_from_im(
-            self.proc_im) # !!! or self.og_im, idk which's better
-        for box_data in self.ocr_data:
-            x0, y0 = box_data['left'], box_data['top']
-            w, h = box_data['width'], box_data['height']
-            x1, y1 = x0 + w, y0 + h
-            self.main_canvas.create_rectangle(
-                *map(lambda n: n * self.main_canvas.scale_factor,
-                     [x0, y0, x1, y1]),
-                outline=MAGENTA, width=LINE_WIDTH)
-
-    def next_stage(self):
-        self.pipeline_data['improc_params'][self.__class__.__name__] = self.param_data
-        progress_data = {'ocr_data': self.ocr_data}
-        self.pipeline_data['improc_progress'][self.__class__.__name__] = progress_data
-        parent = self.master
-
-        # VALIDATION ---------------------------------------------
-        ocr_validation_stack = self.ocr_data.copy()
-        ocr_validation_stack.reverse()
+        self.interpreted_delim_label = tk.Label(
+            self, text='interpreted')
+        self.interpreted_delim_label.grid(row=c, column=1)
+        c += 1
         
-        # --------------------------------------------------------
+        opts = self.interpretation_options
+        for i in range(len(opts)):
+            button = tk.Button(
+                self, text=opts[i]['text'],
+                command=self.f__proceed_with_nth_interpreted(i))
+            button.grid(row=c, column=1)
+            c += 1
+
+        self.historical_delim_label = tk.Label(
+            self, text='historical')
+        self.historical_delim_label.grid(row=c, column=1)
+        c += 1
+
+        for i in range(len(self.historical)):
+            button = tk.Button(
+                self, text=self.historical[i],
+                command=self.f__proceed_with_nth_historical(i))
+            button.grid(row=c, column=1)
+            c += 1
         
-        # --------------------------------------------------------
-        # NEXT CONSTRUCTOR IN PIPELINE IS DELAYED FOR AFTER THE VALIDATION STAGES -
-        # next_frame_constructor = self.pipeline_data['relative_constructors'][
-        #     self.__class__.__name__]['following']
-        # frame = next_frame_constructor(
-        #     parent, self.proc_im.copy(), self.pipeline_data)
-        # --------------------------------------------------------
+    def proceed(self):
+        human_entered = self.entry.get()
+        if human_entered:
+            self.proceed_with_entry()
+        else:
+            self.f__proceed_with_nth_option(0)()
 
-        self.destroy()
-        frame.grid(
-            row=0, column=0, rowspan=FRAME_ROWSPAN)
+    def f__proceed_with_nth_interpreted(self, n):
+        def proceed():
+            self.param_data = {
+                'validated_element': self.interpretation_options[
+                    n]['val'],
+            }
+            self.pass_controll_back_to_the_script()
+        return proceed
 
-    def apply_ocr(self):
-        self.param_data = {} # !!! This should contain the tesseract ocr parameters
-        self.next_stage()
-
-
-class OCRValidation(tk.Frame):
-    def __init__(self, master, ocr_box_im, ocr_box_data, pipeline_data):
-        super().__init__(master)
-        self.im = ocr_box_im
-        self.box_data = ocr_box_data
-        self.pipeline_data = pipeline_data
-
-        self.canvas = ValidationCanvas(self, self.im)
-        self.canvas.grid(row=0, column=0)
+    def f__proceed_with_nth_historical(self, n):
+        def proceed():
+            self.param_data = {
+                'validated_element': self.historical[n],
+            }
+            self.pass_controll_back_to_the_script()
+        return proceed
         
+    def cancel_entry(self):
+        cs = self.entry.get()
+        if cs:
+            self.entry.delete(0, len(cs))
+        self.main_canvas.focus_set()
+
+    def proceed_with_entry(self):
+        self.param_data = {
+            'validated_element': self.entry.get(),
+        }
+        self.pass_controll_back_to_the_script()
+
+    def draw_highlights(self):
+        print('def draw_highlights(self):')
+        print('for box_data:{box_data} in self.ocr_data:{self.ocr_data}:')
+        if not(self.ocr_data): # if hand selected and no recognized txt
+            if 'hand_selection' in self.elem_data.keys():
+                rect = self.main_canvas.create_rectangle(
+                    *self.elem_data['hand_selection'],
+                    outline=MAGENTA, width=LINE_WIDTH)
+            else:
+                pass # if it wasn't a hand selection after all, but a failed line selection perhaps.
+        else:
+            for box_data in self.ocr_data:
+                highlight_coords = list(
+                    self.scale_by_main_canv_sf(
+                        quad_val_coords__from_ocr_elem_data(
+                            box_data)))
+                rect = self.main_canvas.create_rectangle(
+                    *highlight_coords,
+                    outline=MAGENTA, width=LINE_WIDTH)
+                self.highlight_rects.append(rect)
+
+    def overwrite(self, event):
+        self.entry.focus_set()
+    
+    

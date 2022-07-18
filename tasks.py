@@ -90,5 +90,19 @@
   #x# - run a improc gui testbench
     # it was already done, i just had to call a function i wrote
 #x# - implement cancel in all gui frames
-# # - implement box select for what's not being read by tessract on the whole document
+#x# - implement box select for what's not being read by tessract on the whole document
+#x# - install instructive labels in the ocr gui frames
+#x# - install crosshairs in the ocr frames
+#x# - make a validation frame for validating / editing the recognized text from the document
+# # - implement selective interpretation procedures for the type of field in question: furnizor(<Capitalized String>), cantitate(<Float>, ...)
+# # - implement select from historical values in the validation frame
 # # - make a table processing ocr program with which to extract data from tables
+
+# # - multiple selection line selection at the OCR Frame
+  # i sometimes need to select boxes which are not in line, for example, bleeding in the next row
+
+# # - draw boxes in the ocr validation frames for box selected values too, not just for tesseract generated bounding boxes
+
+# # - display the date currently processed in the lower part of every frame. this will give context to the operator
+
+# # - if the document is much taller than is wide, the canvas goes off the page in the OCR frame. Fix that

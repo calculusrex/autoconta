@@ -7,6 +7,8 @@ from PIL import Image
 from copy import deepcopy
 import functools as ft
 import json
+from datetime import datetime
+import pandas as pd
 
 from functional_frames import OCR, OCRROI, DocumentDescriber
 from constants import *
@@ -14,20 +16,48 @@ from im import display_cv, crop
 
 from document_preprocessing import folder_data__
 
-from human import deploy_human_guided_im_transform_pipeline, deploy_human_guided_im_filter_pipeline, human_select_rois, human_extract_elems, human_erase_orthogonal_lines
+from human import deploy_human_guided_im_transform_pipeline, deploy_human_guided_im_filter_pipeline, human_select_rois, human_extract_elems, human_erase_orthogonal_lines, human_validate_elem
 
 from load_documents import load_raw_document_data, load_preproc_doc_data
-from post_ocr_dataproc import string_from_selected_ocr_data
+from history import load_historical_data
+# from post_ocr_dataproc import string_from_selected_ocr_data
+
+# elements_of_interest = {
+#     'header': [
+#         'furnizor', 'nr_doc', 'dată_emitere'],
+#     'body': [
+#         'denumire_produs/serviciu', 'cantitate',
+#         'val_fără_tva', 'preţ_vânzare'],
+#     'footer': ['total'],
+#     # 'chitanță': [],
+# }
 
 elements_of_interest = {
     'header': [
-        'furnizor', 'nr_doc', 'dată_emitere'],
+        {'key': 'furnizor',
+         'type': 'string'},
+        {'key': 'nr_doc',
+         'type': 'string'},
+        {'key': 'dată_emitere',
+         'type': 'date'},
+    ],
     'body': [
-        'denumire_produs/serviciu', 'cantitate',
-        'val_fără_tva', 'preţ_vânzare'],
-    'footer': ['total'],
+        {'key': 'denumire_produs/serviciu',
+         'type': 'string'},
+        {'key': 'cantitate',
+         'type': 'float'},
+        {'key': 'val_fără_tva',
+         'type': 'float'},
+        {'key': 'preţ_vânzare',
+         'type': 'float'},
+    ],
+    'footer': [
+        {'key': 'total',
+         'type': 'float'},
+    ],
     # 'chitanță': [],
 }
+
 
 def splice_in(doc_data, xss, keys, subkeys):
     for key, xs in zip(keys, xss):
@@ -244,25 +274,32 @@ def extracted_data__from_doc_sections(
         data[section_key] = extracted_elem_data
     return data
 
-
-def extract_data(doc_data, elemss_of_interest):
-    extracted_string_data = {}
+def extract_data(doc_data, elemss_of_interest, historical_data):
+    validated_data = {}
     for key in doc_data.keys():
         section_data = doc_sections__(
             doc_data[key], elemss_of_interest)
         extracted_data = extracted_data__from_doc_sections(
             doc_data[key], section_data, elemss_of_interest)
-        string_data = {}
+        validated_doc_data = {}
         for section_key in extracted_data.keys():
-            section_data = {}
+            section = {}
             for elem_key in extracted_data[section_key]:
-                section_data[
-                    elem_key] = string_from_selected_ocr_data(
-                        extracted_data[section_key][elem_key])
-            string_data[section_key] = section_data
-        extracted_string_data[key] = string_data
-    return doc_data, extracted_string_data
-
+                im, validation_data = human_validate_elem(
+                    section_data[section_key]['im'],
+                    extracted_data[section_key][elem_key],
+                    historical_data)
+                section[elem_key] = validation_data
+            validated_doc_data[section_key] = section
+        validated_data[key] = {
+            'section': section_data,
+            'extracted': extracted_data,
+            'validated': validated_doc_data,
+        }
+    return {
+        'document': doc_data,
+        'extracted': validated_data
+    }
 
 def extract_data__imperative(doc_data, elemss_of_interest):
     for key in doc_data.keys():
@@ -276,6 +313,7 @@ def extract_data__imperative(doc_data, elemss_of_interest):
 
 def data_entry__extraction_phase(
         folder_data, elemss_of_interest, preprocess=False):
+    historical_data = load_historical_data(folder_data)
     if preprocess:
         preproc_doc_data = data_entry__preprocessing_phase(
             folder_data)
@@ -284,7 +322,8 @@ def data_entry__extraction_phase(
             folder_data['working_folder'])
     extracted_data = extract_data(
         preproc_doc_data,
-        elemss_of_interest)
+        elemss_of_interest,
+        historical_data)
     # export_to_pag_interface(
     #     extracted_data)
     return extracted_data
@@ -303,6 +342,19 @@ if __name__ == '__main__':
         'levike_facturi_test',
         subfolders[0]])
 
+    history_path = "/".join([
+        'test_data',
+        'levike_facturi_test',
+        'saga_history'])
+
+    bills_fpath = "/".join([
+        history_path,
+        'intrari_facturi_ardeleanu__20_06_2022.csv'])
+
+    items_fpath = "/".join([
+        history_path,
+        'intrari_articole_ardeleanu__20_06_2022.csv'])
+
     working_folder = "/".join([
         project_folder, subfolder_path])
 
@@ -311,10 +363,15 @@ if __name__ == '__main__':
         'subfolders': subfolders,
         'working_folder': working_folder,
         'subfolder_path': subfolder_path,
+        'history_path': history_path,
+        'bills_fpath': bills_fpath,
+        'items_fpath': items_fpath,
     }
     
     # xtracted_data = data_entry__preprocessing_phase(
     #     folder_data, write_out=True)
 
-    doc_data, string_data = data_entry__extraction_phase(
-        folder_data, elements_of_interest)
+    xtrct = data_entry__extraction_phase
+    extracted_data = xtrct(
+        folder_data, elements_of_interest,
+        preprocess=True)
