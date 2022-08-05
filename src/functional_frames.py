@@ -936,16 +936,20 @@ class OCR(ImProcEditor):
         self.extracted_data = {}
 
         self.box_select_mode = False
+        self.multiline_select_mode = False
         self.augment_main_canvas_bindings([
             ('<Motion>', self.hover),
             ('<Button-1>', self.click),
             ('b', lambda e: self.toggle_box_select_mode()),
             ('n', lambda e: self.unavailable_elem_val()),
+            ('m', lambda e: self.toggle_multiline_select_mode()),
+            ('<Return>', lambda e: self.proceed_with_selection()),
         ])
 
         self.ocr_rectangles = []
         self.selection_point_a = None
         self.selection_point_b = None
+        self.selection_pointss = []
         self.selection_line = self.main_canvas.create_line(
             0, 0, 0, 0, fill=BLUE, width=3)
         self.selection_box = self.main_canvas.create_rectangle(
@@ -961,6 +965,30 @@ class OCR(ImProcEditor):
         self.plot_ocr_bounding_boxes()
         # self.bind('<space>', self.apply_ocr),
 
+    def proceed_with_selection(self):
+        self.selected_boxes = ft.reduce(
+            lambda a, b: a + b,
+            map(self.select_boxes,
+                self.selection_pointss))
+
+        key = self.elems_to_extract[-1]['key']
+        type_ = self.elems_to_extract[-1]['type']
+        self.extracted_data[key] = {
+            'box_data': self.selected_boxes,
+            'key': key,
+            'type': type_}
+        print(
+            self.extracted_data[key], '\n')
+
+        self.toggle_multiline_select_mode()
+        self.finish_or_proceed_to_next_elem()
+
+    def toggle_multiline_select_mode(self):
+        if self.multiline_select_mode:
+            self.multiline_select_mode = False
+        else:
+            self.multiline_select_mode = True
+
     def unavailable_elem_val(self):
         key = self.elems_to_extract[-1]['key']
         type_ = self.elems_to_extract[-1]['type']
@@ -970,14 +998,15 @@ class OCR(ImProcEditor):
             'type': type_}
         self.elems_to_extract.pop()
         if len(self.elems_to_extract) == 0:
-            self.populate_param_data()
-            self.pass_controll_back_to_the_script()
+            self.pass_controll_back()
         else:
-            self.labels['elem_to_select'].config(
-                text="\n".join(
-                    ['please_select',
-                     self.elems_to_extract[-1]['key']]))
+            self.prompt_for_next_element_selection()
 
+    def prompt_for_next_element_selection(self):
+        self.labels['elem_to_select'].config(
+            text="\n".join(
+                ['please_select',
+                 self.elems_to_extract[-1]['key']]))
 
     def toggle_box_select_mode(self):
         if self.box_select_mode:
@@ -1001,27 +1030,28 @@ class OCR(ImProcEditor):
         vertically = pXy > pAy and pXy < pBy
         return horizontally and vertically
 
-    def is_box_in_line(self, bounding_box, sample_n=100):
-        p0, p1 = (self.selection_point_a['im'],
-                  self.selection_point_b['im'])
-        A = np.array(p0)
-        B = np.array(p1)
-        D = B - A
-        interpolated = []
-        scales = np.arange(0, 1, 1/sample_n)
-        for i in range(sample_n):
-            interpolated.append(
-                A + D * scales[i])
-        return ft.reduce(
-            lambda a, b: a or b,
-            map(lambda p: self.is_point_in_box(p, bounding_box),
-                interpolated))            
+    def is_box_in_line(self, point_pair, sample_n=100):
+        p0, p1 = point_pair
+        def is_it(bounding_box):
+            A = np.array(p0)
+            B = np.array(p1)
+            D = B - A
+            interpolated = []
+            scales = np.arange(0, 1, 1/sample_n)
+            for i in range(sample_n):
+                interpolated.append(
+                    A + D * scales[i])
+            bbox = bounding_box
+            return ft.reduce(
+                lambda a, b: a or b,
+                map(lambda p: self.is_point_in_box(p, bbox),
+                    interpolated))
+        return is_it
         
-    def select_boxes(self):
-        self.selected_boxes = list(
-            filter(self.is_box_in_line,
-                   self.ocr_data_lvl5))
-        # print('selected_boxes: ', self.selected_boxes)
+    def select_boxes(self, point_pair):
+        return list(filter(
+            self.is_box_in_line(point_pair),
+            self.ocr_data_lvl5))
 
     def ocr_proc_selected_box(self):
         a, b = cnvrt_2_topLeft_n_bttmRight(
@@ -1049,45 +1079,56 @@ class OCR(ImProcEditor):
                 'im': (im_x, im_y),
                 'canv': (event.x, event.y),
             }
-            if self.box_select_mode: # when tesseract hasn't picked up the text of interest, we box select the image subset containing all of it to be sent individually to be ocr extracted.
-                box_data = self.ocr_proc_selected_box()
-                key = self.elems_to_extract[-1]['key']
-                type_ = self.elems_to_extract[-1]['type']
-                hand_selection_box_coos = quad_val_coords__(
-                    self.selection_point_a,
-                    self.selection_point_b)
-                self.extracted_data[key] = {
-                    'box_data': box_data,
-                    'key': key,
-                    'hand_selection': hand_selection_box_coos,
-                    'type': type_}
-                print(
-                    self.extracted_data[key], '\n')
-                self.toggle_box_select_mode() # return to normal mode of operation
-            else: # line select mode
-                self.select_boxes()
-                key = self.elems_to_extract[-1]['key']
-                type_ = self.elems_to_extract[-1]['type']
-                self.extracted_data[key] = {
-                    'box_data': self.selected_boxes,
-                    'key': key,
-                    'type': type_}
-                print(
-                    self.extracted_data[key], '\n')
-            self.elems_to_extract.pop()
-            if len(self.elems_to_extract) == 0:
-                self.populate_param_data()
-                self.pass_controll_back_to_the_script()
-            else:
-                self.labels['elem_to_select'].config(
-                    text="\n".join(
-                        ['please_select',
-                         self.elems_to_extract[-1]['key']]))
-                # print(
-                #     'please_select: ',
-                #     self.elems_to_extract[-1])
+ 
+            if self.multiline_select_mode:
+                self.selection_pointss.append(
+                    (self.selection_point_a['im'],
+                     self.selection_point_b['im']))
                 self.selection_point_a = None
                 self.selection_point_b = None
+
+            else:
+                if self.box_select_mode: # when tesseract hasn't picked up the text of interest, we box select the image subset containing all of it to be sent individually to be ocr extracted.
+                    box_data = self.ocr_proc_selected_box()
+                    key = self.elems_to_extract[-1]['key']
+                    type_ = self.elems_to_extract[-1]['type']
+
+                    ax, ay = self.selection_point_a['im']
+                    bx, by = self.selection_point_b['im']
+                    hand_selection = (ax, ay, bx, by)
+                    print(f'hand_selection: {hand_selection}')
+                    self.extracted_data[key] = {
+                        'box_data': box_data,
+                        'key': key,
+                        'hand_selection': hand_selection,
+                        'type': type_}
+                    print(
+                        self.extracted_data[key], '\n')
+                    self.toggle_box_select_mode() # return to normal mode of operation
+
+                else: # line select mode
+                    self.selected_boxes = self.select_boxes(
+                        (self.selection_point_a['im'],
+                         self.selection_point_b['im']))
+                    key = self.elems_to_extract[-1]['key']
+                    type_ = self.elems_to_extract[-1]['type']
+                    self.extracted_data[key] = {
+                        'box_data': self.selected_boxes,
+                        'key': key,
+                        'type': type_}
+                    print(
+                        self.extracted_data[key], '\n')
+
+                self.finish_or_proceed_to_next_elem()
+
+    def finish_or_proceed_to_next_elem(self):
+        self.elems_to_extract.pop()
+        if len(self.elems_to_extract) == 0:
+            self.pass_controll_back()
+        else:
+            self.prompt_for_next_element_selection()
+            self.selection_point_a = None
+            self.selection_point_b = None
 
     def populate_param_data(self):
         self.param_data = self.extracted_data
@@ -1131,6 +1172,10 @@ class OCR(ImProcEditor):
                             box_data)),
                     outline=MAGENTA, width=LINE_WIDTH))
 
+    def pass_controll_back(self):
+        self.populate_param_data()
+        self.pass_controll_back_to_the_script()
+
 class OCRValidation(ImProcEditor):
     def __init__(self, root, state_data, im):
         super().__init__(root, state_data, im)
@@ -1164,11 +1209,15 @@ class OCRValidation(ImProcEditor):
         ])
         self.interpretation_options = self.interpret()
 
-        self.historical = historical(
-            self.elem_data, self.history)
+        if self.elem_data['box_data']:
+            self.historical = historical(
+                self.elem_data, self.history)
+        else:
+            self.historical = []
         
         print(self.interpretation_options)
-        self.install_buttons()
+        if self.interpretation_options:
+            self.install_buttons()
 
     def interpret(self):
         return interpret(self.elem_data)

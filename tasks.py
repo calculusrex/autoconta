@@ -94,15 +94,33 @@
 #x# - install instructive labels in the ocr gui frames
 #x# - install crosshairs in the ocr frames
 #x# - make a validation frame for validating / editing the recognized text from the document
-# # - implement selective interpretation procedures for the type of field in question: furnizor(<Capitalized String>), cantitate(<Float>, ...)
-# # - implement select from historical values in the validation frame
-# # - make a table processing ocr program with which to extract data from tables
-
+#x# - implement selective interpretation procedures for the type of field in question: furnizor(<Capitalized String>), cantitate(<Float>, ...)
+#x# - implement select from historical values in the validation frame
 # # - multiple selection line selection at the OCR Frame
   # i sometimes need to select boxes which are not in line, for example, bleeding in the next row
 
 # # - draw boxes in the ocr validation frames for box selected values too, not just for tesseract generated bounding boxes
 
-# # - display the date currently processed in the lower part of every frame. this will give context to the operator
+# # - display the data currently processed in the lower part of every frame. this will give context to the operator
 
 # # - if the document is much taller than is wide, the canvas goes off the page in the OCR frame. Fix that
+
+# # - make a table processing ocr program with which to extract data from tables
+  # # - make a vertical splitter for the table, sepparating the header from the body
+
+# # - write general data export and import functions, preserving both images and json serializable data
+  # it receives a folder path as argument for both export and import. it then constructs a standard sparse data structure
+  # # - place the non-serializable data in directory structures mirroring the paths in the key/value and sequences python data structure.
+  # # - the json file exported (serializable data) contains a struct of this form:
+      # {'type': 'cvim', 'path': '/path/to/file.png'}
+      # for the values of non-json-serializable data.
+  # # - export csv summaries destined for the human reader for every export in the data storing folder.
+      # this way, you can look into a folder and understand it quicker, without importing the data into a python shell.
+# # - preserve data representing functions for converting document section coordinates in the data structures saved and loaded to disk
+  # this way, i can use the coordinates extracted down the line to crop and highlight the original document image.
+  # # - at the validation stage, display cropped clippings of the unfiltered, transformed image.
+# # - fix the orthogonal line eraser, it doesen't work for the preprocess pipeline.
+# # - sepparate the gui from the back end, interfacing them through web protocol.
+  
+# # GOAL:
+  ### EXTRACT THE DATA FROM THE DOCUMENTS (INVOICES)
