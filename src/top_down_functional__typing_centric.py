@@ -9,6 +9,7 @@ import functools as ft
 import json
 from datetime import datetime
 import pandas as pd
+from pprint import pprint
 
 from functional_frames import OCR, OCRROI, DocumentDescriber
 from constants import *
@@ -20,6 +21,8 @@ from human import deploy_human_guided_im_transform_pipeline, deploy_human_guided
 
 from load_documents import load_raw_document_data, load_preproc_doc_data
 from history import load_historical_data
+
+from data_save import save_structure_to_disk, load_structure_from_disk
 # from post_ocr_dataproc import string_from_selected_ocr_data
 
 # elements_of_interest = {
@@ -32,31 +35,23 @@ from history import load_historical_data
 #     # 'chitanță': [],
 # }
 
-elements_of_interest = {
-    'header': [
-        {'key': 'furnizor',
-         'type': 'string'},
-        {'key': 'nr_doc',
-         'type': 'string'},
-        {'key': 'dată_emitere',
-         'type': 'date'},
-    ],
-    'body': [
-        {'key': 'denumire_produs/serviciu',
-         'type': 'string'},
-        {'key': 'cantitate',
-         'type': 'float'},
-        {'key': 'val_fără_tva',
-         'type': 'float'},
-        {'key': 'preţ_vânzare',
-         'type': 'float'},
-    ],
-    'footer': [
-        {'key': 'total',
-         'type': 'float'},
-    ],
-    # 'chitanță': [],
+metadata_elements_of_interest = {
+    'furnizor': 'string',
+    'nr_doc': 'string',
+    'dată_emitere': 'date',
+    'total': 'float',
 }
+
+    # 'body': [
+    #     {'key': 'denumire_produs/serviciu',
+    #      'type': 'string'},
+    #     {'key': 'cantitate',
+    #      'type': 'float'},
+    #     {'key': 'val_fără_tva',
+    #      'type': 'float'},
+    #     {'key': 'preţ_vânzare',
+    #      'type': 'float'},
+    # ],
 
 
 def splice_in(doc_data, xss, keys, subkeys):
@@ -148,8 +143,13 @@ def data_entry__preprocessing_phase(
         fst_n=2) # !!! DEBUG
     preproc_doc_data = preprocess_documents(doc_data) # HITL
     if write_out:
-        write_preproc_document_data_out(
-            folder_data, preproc_doc_data)
+        save_structure_to_disk(
+            preproc_doc_data,
+            '/'.join([
+                folder_data['working_folder'],
+                'preprocessed_documents']))
+        # write_preproc_document_data_out(
+        #     folder_data, preproc_doc_data)
     return preproc_doc_data
 
 # acting on a single document
@@ -225,8 +225,8 @@ def augment_wth_doc_sections(doc_dat, elemss_of_interest):
         doc_dat['sections'][roi_key]['data'] = rois_data[roi_key]
         doc_dat['sections'][roi_key]['im'] = section_im
 
-def doc_sections__(doc_dat, elemss_of_interest):
-    doc_section_keys = list(elemss_of_interest.keys())
+def doc_sections__(doc_dat, metadata_elems_of_interest):
+    doc_section_keys = list(metadata_elems_of_interest.keys())
     rois_data = select_doc_section_rois(
         doc_dat, doc_section_keys)
     doc_dat['sections'] = {}
@@ -257,10 +257,10 @@ def augment_wth_extracted_data(doc_dat, elemss_of_interest):
             'extracted'] = extracted_elem_data
 
 def extracted_data__from_doc_sections(
-        doc_dat, section_data, elemss_of_interest):
+        doc_dat, section_data, metadata_elems_of_interest):
     data = {}
     for section_key in section_data.keys():
-        elems_to_extract = elemss_of_interest[section_key]
+        elems_to_extract = metadata_elems_of_interest[section_key]
         im, params = human_erase_orthogonal_lines(
             section_data[section_key]['im'])
         section_data[section_key]['im'] = im
@@ -274,32 +274,34 @@ def extracted_data__from_doc_sections(
         data[section_key] = extracted_elem_data
     return data
 
-def extract_data(doc_data, elemss_of_interest, historical_data):
+def extract_data(
+        doc_data, metadata_elems_of_interest, historical_data):
     validated_data = {}
     for key in doc_data.keys():
         section_data = doc_sections__(
-            doc_data[key], elemss_of_interest)
-        extracted_data = extracted_data__from_doc_sections(
-            doc_data[key], section_data, elemss_of_interest)
-        validated_doc_data = {}
-        for section_key in extracted_data.keys():
-            section = {}
-            for elem_key in extracted_data[section_key]:
-                im, validation_data = human_validate_elem(
-                    section_data[section_key]['im'],
-                    extracted_data[section_key][elem_key],
-                    historical_data)
-                section[elem_key] = validation_data
-            validated_doc_data[section_key] = section
-        validated_data[key] = {
-            'section': section_data,
-            'extracted': extracted_data,
-            'validated': validated_doc_data,
-        }
-    return {
-        'document': doc_data,
-        'extracted': validated_data
-    }
+            doc_data[key], metadata_elems_of_interest)
+    #     extracted_data = extracted_data__from_doc_sections(
+    #         doc_data[key], section_data,
+    #         metadata_elems_of_interest)
+    #     validated_doc_data = {}
+    #     for section_key in extracted_data.keys():
+    #         section = {}
+    #         for elem_key in extracted_data[section_key]:
+    #             im, validation_data = human_validate_elem(
+    #                 section_data[section_key]['im'],
+    #                 extracted_data[section_key][elem_key],
+    #                 historical_data)
+    #             section[elem_key] = validation_data
+    #         validated_doc_data[section_key] = section
+    #     validated_data[key] = {
+    #         'section': section_data,
+    #         'extracted': extracted_data,
+    #         'validated': validated_doc_data,
+    #     }
+    # return {
+    #     'document': doc_data,
+    #     'extracted': validated_data
+    # }
 
 def extract_data__imperative(doc_data, elemss_of_interest):
     for key in doc_data.keys():
@@ -312,17 +314,18 @@ def extract_data__imperative(doc_data, elemss_of_interest):
     
 
 def data_entry__extraction_phase(
-        folder_data, elemss_of_interest, preprocess=False):
+        folder_data, metadata_elems_of_interest,
+        preprocess=False):
     historical_data = load_historical_data(folder_data)
     if preprocess:
         preproc_doc_data = data_entry__preprocessing_phase(
-            folder_data)
+            folder_data, write_out=True) ### DEBUG !!!
     else:
         preproc_doc_data = load_preproc_doc_data(
             folder_data['working_folder'])
     extracted_data = extract_data(
         preproc_doc_data,
-        elemss_of_interest,
+        metadata_elems_of_interest,
         historical_data)
     # export_to_pag_interface(
     #     extracted_data)
@@ -374,5 +377,5 @@ if __name__ == '__main__':
 
     xtrct = data_entry__extraction_phase
     extracted_data = xtrct(
-        folder_data, elements_of_interest,
+        folder_data, metadata_elements_of_interest,
         preprocess=True)
